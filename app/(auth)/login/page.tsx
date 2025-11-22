@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
-import { authAPI } from '@/lib/api';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -43,22 +42,47 @@ export default function LoginPage() {
     setSuccess(false);
 
     try {
-      const response = await authAPI.login(data);
-      const { user, token } = response.data;
+      // Simulate API delay for better UX
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      login(user, token);
+      // Check localStorage for existing users
+      const existingUsers = JSON.parse(localStorage.getItem('users') || '[]');
+      const foundUser = existingUsers.find(
+        (u: { email: string; password: string }) =>
+          u.email === data.email && u.password === data.password
+      );
+
+      if (!foundUser) {
+        setError('Invalid email or password. Please try again.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create user object without password
+      const userWithoutPassword = {
+        id: foundUser.id,
+        name: foundUser.name,
+        email: foundUser.email,
+        role: foundUser.role,
+      };
+
+      // Generate mock token
+      const mockToken = `token-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+
+      login(userWithoutPassword, mockToken);
       setSuccess(true);
 
       // Redirect based on role after brief success message
       setTimeout(() => {
-        if (user.role === 'admin') {
+        if (foundUser.role === 'admin') {
           router.push('/admin');
         } else {
           router.push('/creator');
         }
       }, 1500);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+    } catch (err: unknown) {
+      console.error('Login error:', err);
+      setError('Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

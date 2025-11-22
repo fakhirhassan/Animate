@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
-import { authAPI } from '@/lib/api';
 
 const signupSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -49,26 +48,46 @@ export default function SignupPage() {
     setSuccess(false);
 
     try {
-      // Add role as 'creator' by default
-      const signupData = {
+      // Simulate API delay for better UX
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Check if email already exists in localStorage
+      const existingUsers = JSON.parse(localStorage.getItem('users') || '[]');
+      const emailExists = existingUsers.some((user: { email: string }) => user.email === data.email);
+
+      if (emailExists) {
+        setError('An account with this email already exists. Please login instead.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create new user object
+      const newUser = {
+        id: `user-${Date.now()}`,
         name: data.name,
         email: data.email,
-        password: data.password,
-        role: 'creator',
+        role: 'creator' as const,
+        createdAt: new Date().toISOString(),
       };
 
-      const response = await authAPI.signup(signupData);
-      const { user, token } = response.data;
+      // Save user to localStorage "database"
+      const updatedUsers = [...existingUsers, { ...newUser, password: data.password }];
+      localStorage.setItem('users', JSON.stringify(updatedUsers));
 
-      login(user, token);
+      // Generate mock token
+      const mockToken = `token-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+
+      // Login the user
+      login(newUser, mockToken);
       setSuccess(true);
 
       // Redirect to creator dashboard after brief success message
       setTimeout(() => {
         router.push('/creator');
       }, 1500);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Signup failed. Please try again.');
+    } catch (err: unknown) {
+      console.error('Signup error:', err);
+      setError('Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
