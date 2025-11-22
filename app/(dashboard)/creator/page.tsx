@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Upload,
@@ -13,6 +14,7 @@ import {
   Trash2,
   Eye,
   Layers,
+  LogOut,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +27,8 @@ import { useAuthStore } from '@/store/authStore';
 import { projectsAPI } from '@/lib/api';
 
 export default function CreatorDashboard() {
-  const { user } = useAuthStore();
+  const router = useRouter();
+  const { user, logout } = useAuthStore();
   const [script, setScript] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -97,6 +100,11 @@ export default function CreatorDashboard() {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
+
   return (
     <div className="min-h-screen pt-20 pb-12 px-4 relative overflow-hidden">
       {/* Background */}
@@ -107,16 +115,26 @@ export default function CreatorDashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-8 flex items-start justify-between"
         >
-          <h1 className="text-4xl font-bold mb-2">
-            <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Creator Dashboard
-            </span>
-          </h1>
-          <p className="text-gray-400">
-            Welcome back, {user?.name}! Let's create something amazing.
-          </p>
+          <div>
+            <h1 className="text-4xl font-bold mb-2">
+              <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                Creator Dashboard
+              </span>
+            </h1>
+            <p className="text-gray-400">
+              Welcome back, {user?.name}! Let's create something amazing.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            className="flex items-center gap-2 border-gray-200 bg-white text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all duration-200"
+          >
+            <span className="hidden sm:inline">{user?.name}</span>
+            <LogOut className="h-4 w-4" />
+          </Button>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

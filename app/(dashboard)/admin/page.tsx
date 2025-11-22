@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Users,
@@ -11,6 +12,7 @@ import {
   UserCheck,
   MoreVertical,
   Search,
+  LogOut,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,7 +37,8 @@ import { useAuthStore } from '@/store/authStore';
 import { adminAPI } from '@/lib/api';
 
 export default function AdminDashboard() {
-  const { user } = useAuthStore();
+  const router = useRouter();
+  const { user, logout } = useAuthStore();
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -133,6 +136,11 @@ export default function AdminDashboard() {
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleLogout = () => {
+    logout();
+    router.push('/admin-login');
+  };
+
   return (
     <div className="min-h-screen pt-20 pb-12 px-4 relative overflow-hidden">
       {/* Background */}
@@ -143,16 +151,26 @@ export default function AdminDashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-8 flex items-start justify-between"
         >
-          <h1 className="text-4xl font-bold mb-2">
-            <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Admin Dashboard
-            </span>
-          </h1>
-          <p className="text-gray-400">
-            Welcome back, {user?.name}! Here's what's happening today.
-          </p>
+          <div>
+            <h1 className="text-4xl font-bold mb-2">
+              <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                Admin Dashboard
+              </span>
+            </h1>
+            <p className="text-gray-400">
+              Welcome back, {user?.name}! Here's what's happening today.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            className="flex items-center gap-2 border-gray-200 bg-white text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all duration-200"
+          >
+            <span className="hidden sm:inline">{user?.name}</span>
+            <LogOut className="h-4 w-4" />
+          </Button>
         </motion.div>
 
         {/* Stats Grid */}
