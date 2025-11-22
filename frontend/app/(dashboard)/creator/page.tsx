@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Upload,
@@ -14,24 +13,23 @@ import {
   Trash2,
   Eye,
   Layers,
-  LogOut,
   Box,
   ArrowRight,
+  TrendingUp,
+  Clock,
+  HardDrive,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/authStore';
-import { projectsAPI } from '@/lib/api';
 
 export default function CreatorDashboard() {
-  const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const [script, setScript] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -76,7 +74,6 @@ export default function CreatorDashboard() {
     setIsGenerating(true);
 
     try {
-      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 3000));
       alert('Animation generation started! Check your projects.');
       setScript('');
@@ -92,7 +89,6 @@ export default function CreatorDashboard() {
     setIsConverting(true);
 
     try {
-      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 3000));
       alert('2D to 3D conversion started! Check your projects.');
       setSelectedFile(null);
@@ -103,41 +99,80 @@ export default function CreatorDashboard() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
-  };
-
   return (
-    <div className="min-h-screen pt-20 pb-12 px-4 relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 gradient-mesh opacity-20"></div>
-
-      <div className="relative z-10 max-w-7xl mx-auto">
-        {/* Header */}
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto">
+        {/* Page Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 flex items-start justify-between"
+          className="mb-8"
         >
-          <div>
-            <h1 className="text-4xl font-bold mb-2">
-              <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                Creator Dashboard
-              </span>
-            </h1>
-            <p className="text-gray-400">
-              Welcome back, {user?.name}! Let's create something amazing.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            className="flex items-center gap-2 border-gray-200 bg-white text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all duration-200"
-          >
-            <span className="hidden sm:inline">{user?.name}</span>
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back, {user?.name || 'Creator'}!
+          </h1>
+          <p className="text-gray-500">
+            Let's create something amazing today.
+          </p>
+        </motion.div>
+
+        {/* Stats Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
+        >
+          <Card className="border-gray-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Total Projects</p>
+                  <p className="text-2xl font-bold text-gray-900">24</p>
+                </div>
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="h-5 w-5 text-purple-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-gray-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">This Month</p>
+                  <p className="text-2xl font-bold text-gray-900">8</p>
+                </div>
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-blue-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-gray-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Storage Used</p>
+                  <p className="text-2xl font-bold text-gray-900">2.4 GB</p>
+                </div>
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <HardDrive className="h-5 w-5 text-green-600" />
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-1.5 rounded-full"
+                    style={{ width: '24%' }}
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">2.4 GB of 10 GB</p>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -147,40 +182,40 @@ export default function CreatorDashboard() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
+              transition={{ delay: 0.2 }}
             >
-              <Card className="glass-strong border-white/10">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Wand2 className="h-5 w-5" />
+              <Card className="border-gray-200">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-gray-900 flex items-center gap-2">
+                    <Wand2 className="h-5 w-5 text-purple-500" />
                     Create New Animation
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Tabs defaultValue="script" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 glass">
+                    <TabsList className="grid w-full grid-cols-2 bg-gray-100">
                       <TabsTrigger value="script">From Script</TabsTrigger>
                       <TabsTrigger value="convert">2D to 3D</TabsTrigger>
                     </TabsList>
 
                     {/* Script to Animation */}
-                    <TabsContent value="script" className="space-y-4">
+                    <TabsContent value="script" className="space-y-4 pt-4">
                       <div className="space-y-2">
-                        <Label htmlFor="script" className="text-white">
+                        <Label htmlFor="script" className="text-gray-700">
                           Animation Script
                         </Label>
                         <Textarea
                           id="script"
                           placeholder="Describe your animation... e.g., 'A robot walking through a futuristic city at sunset'"
-                          className="glass border-white/10 text-white min-h-[200px]"
+                          className="border-gray-200 min-h-[160px] resize-none"
                           value={script}
                           onChange={(e) => setScript(e.target.value)}
                         />
                       </div>
 
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <Button
-                          className="gradient-primary flex-1"
+                          className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
                           onClick={handleGenerate}
                           disabled={!script || isGenerating}
                         >
@@ -196,21 +231,21 @@ export default function CreatorDashboard() {
                             </>
                           )}
                         </Button>
-                        <Button variant="outline" className="glass border-white/10">
+                        <Button variant="outline" className="border-gray-200">
                           <FileText className="mr-2 h-4 w-4" />
-                          Upload Script
+                          Upload
                         </Button>
                       </div>
                     </TabsContent>
 
                     {/* 2D to 3D Converter */}
-                    <TabsContent value="convert" className="space-y-4">
+                    <TabsContent value="convert" className="space-y-4 pt-4">
                       <div className="space-y-2">
-                        <Label htmlFor="file" className="text-white">
+                        <Label htmlFor="file" className="text-gray-700">
                           Upload 2D Animation
                         </Label>
                         <div
-                          className="glass border-2 border-dashed border-white/10 rounded-lg p-8 text-center cursor-pointer hover:border-purple-500/50 transition-colors"
+                          className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50/50 transition-all"
                           onClick={() => fileInputRef.current?.click()}
                         >
                           <input
@@ -220,20 +255,22 @@ export default function CreatorDashboard() {
                             accept="image/*,video/*"
                             onChange={handleFileSelect}
                           />
-                          <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                          <Upload className="h-10 w-10 mx-auto mb-3 text-gray-400" />
                           {selectedFile ? (
                             <div>
-                              <p className="text-white mb-2">{selectedFile.name}</p>
-                              <p className="text-sm text-gray-400">
+                              <p className="text-gray-900 font-medium mb-1">
+                                {selectedFile.name}
+                              </p>
+                              <p className="text-sm text-gray-500">
                                 {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                               </p>
                             </div>
                           ) : (
                             <div>
-                              <p className="text-white mb-2">
+                              <p className="text-gray-900 font-medium mb-1">
                                 Click to upload or drag and drop
                               </p>
-                              <p className="text-sm text-gray-400">
+                              <p className="text-sm text-gray-500">
                                 PNG, JPG, GIF, MP4 (max. 100MB)
                               </p>
                             </div>
@@ -241,23 +278,31 @@ export default function CreatorDashboard() {
                         </div>
                       </div>
 
-                      <Button
-                        className="gradient-primary w-full"
-                        onClick={handleConvert2Dto3D}
-                        disabled={!selectedFile || isConverting}
-                      >
-                        {isConverting ? (
-                          <>
-                            <Layers className="mr-2 h-4 w-4 animate-spin" />
-                            Converting...
-                          </>
-                        ) : (
-                          <>
-                            <Layers className="mr-2 h-4 w-4" />
-                            Convert to 3D
-                          </>
-                        )}
-                      </Button>
+                      <div className="flex gap-3">
+                        <Button
+                          className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+                          onClick={handleConvert2Dto3D}
+                          disabled={!selectedFile || isConverting}
+                        >
+                          {isConverting ? (
+                            <>
+                              <Layers className="mr-2 h-4 w-4 animate-spin" />
+                              Converting...
+                            </>
+                          ) : (
+                            <>
+                              <Layers className="mr-2 h-4 w-4" />
+                              Quick Convert
+                            </>
+                          )}
+                        </Button>
+                        <Link href="/creator/2d-to-3d">
+                          <Button variant="outline" className="border-gray-200">
+                            <Box className="mr-2 h-4 w-4" />
+                            Advanced
+                          </Button>
+                        </Link>
+                      </div>
                     </TabsContent>
                   </Tabs>
                 </CardContent>
@@ -268,16 +313,16 @@ export default function CreatorDashboard() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+              transition={{ delay: 0.3 }}
             >
-              <Card className="glass-strong border-white/10">
-                <CardHeader>
+              <Card className="border-gray-200">
+                <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-white flex items-center gap-2">
-                      <Video className="h-5 w-5" />
+                    <CardTitle className="text-gray-900 flex items-center gap-2">
+                      <Video className="h-5 w-5 text-blue-500" />
                       Recent Projects
                     </CardTitle>
-                    <Button variant="outline" className="glass border-white/10">
+                    <Button variant="ghost" size="sm" className="text-gray-500">
                       View All
                     </Button>
                   </div>
@@ -287,38 +332,46 @@ export default function CreatorDashboard() {
                     {projects.map((project) => (
                       <div
                         key={project.id}
-                        className="glass rounded-lg p-4 border border-white/10 hover:border-purple-500/50 transition-colors"
+                        className="bg-gray-50 rounded-lg p-4 border border-gray-100 hover:border-purple-200 hover:shadow-sm transition-all"
                       >
-                        <div className="aspect-video bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg mb-3 flex items-center justify-center">
-                          <Play className="h-12 w-12 text-white/50" />
+                        <div className="aspect-video bg-gradient-to-br from-purple-100 to-pink-100 rounded-lg mb-3 flex items-center justify-center">
+                          <Play className="h-10 w-10 text-purple-400" />
                         </div>
-                        <h3 className="text-white font-semibold mb-2">
+                        <h3 className="text-gray-900 font-semibold mb-2">
                           {project.name}
                         </h3>
                         <div className="flex items-center justify-between mb-3">
                           <Badge
                             className={
                               project.status === 'completed'
-                                ? 'bg-green-500/20 text-green-400 border-0'
-                                : 'bg-yellow-500/20 text-yellow-400 border-0'
+                                ? 'bg-green-100 text-green-700 border-0'
+                                : 'bg-yellow-100 text-yellow-700 border-0'
                             }
                           >
                             {project.status}
                           </Badge>
-                          <span className="text-sm text-gray-400">
+                          <span className="text-sm text-gray-500">
                             {project.duration}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" className="flex-1 glass border-white/10">
-                            <Eye className="mr-2 h-4 w-4" />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 border-gray-200"
+                          >
+                            <Eye className="mr-2 h-3 w-3" />
                             View
                           </Button>
-                          <Button size="sm" variant="outline" className="glass border-white/10">
-                            <Download className="h-4 w-4" />
+                          <Button size="sm" variant="outline" className="border-gray-200">
+                            <Download className="h-3 w-3" />
                           </Button>
-                          <Button size="sm" variant="outline" className="glass border-white/10 text-red-400">
-                            <Trash2 className="h-4 w-4" />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-200 text-red-500 hover:text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </div>
@@ -329,73 +382,71 @@ export default function CreatorDashboard() {
             </motion.div>
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar - Quick Actions */}
           <div className="space-y-6">
-            {/* Quick Stats */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="glass-strong border-white/10">
-                <CardHeader>
-                  <CardTitle className="text-white text-lg">Your Stats</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400">Total Projects</span>
-                    <span className="text-2xl font-bold text-white">24</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400">This Month</span>
-                    <span className="text-2xl font-bold text-purple-400">8</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400">Storage Used</span>
-                    <span className="text-lg font-semibold text-white">
-                      2.4 GB / 10 GB
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2">
-                    <div
-                      className="gradient-primary h-2 rounded-full"
-                      style={{ width: '24%' }}
-                    ></div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Quick Actions */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.4 }}
             >
-              <Card className="glass-strong border-white/10">
-                <CardHeader>
-                  <CardTitle className="text-white text-lg">Quick Actions</CardTitle>
+              <Card className="border-gray-200">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-gray-900 text-lg">Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <Button className="w-full justify-start glass border-white/10" variant="outline">
-                    <Plus className="mr-2 h-4 w-4" />
+                  <Button
+                    className="w-full justify-start border-gray-200 hover:bg-gray-50"
+                    variant="outline"
+                  >
+                    <Plus className="mr-2 h-4 w-4 text-purple-500" />
                     New Project
                   </Button>
                   <Link href="/creator/2d-to-3d" className="block">
-                    <Button className="w-full justify-start glass border-white/10 hover:border-purple-500/50 hover:bg-purple-500/10 transition-all" variant="outline">
+                    <Button
+                      className="w-full justify-start border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700"
+                      variant="outline"
+                    >
                       <Box className="mr-2 h-4 w-4" />
                       2D to 3D Converter
                       <ArrowRight className="ml-auto h-4 w-4 opacity-50" />
                     </Button>
                   </Link>
-                  <Button className="w-full justify-start glass border-white/10" variant="outline">
-                    <Upload className="mr-2 h-4 w-4" />
+                  <Button
+                    className="w-full justify-start border-gray-200 hover:bg-gray-50"
+                    variant="outline"
+                  >
+                    <Upload className="mr-2 h-4 w-4 text-blue-500" />
                     Upload Files
                   </Button>
-                  <Button className="w-full justify-start glass border-white/10" variant="outline">
-                    <FileText className="mr-2 h-4 w-4" />
+                  <Button
+                    className="w-full justify-start border-gray-200 hover:bg-gray-50"
+                    variant="outline"
+                  >
+                    <FileText className="mr-2 h-4 w-4 text-green-500" />
                     Templates
                   </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Tips Card */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Card className="border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50">
+                <CardContent className="p-5">
+                  <h3 className="font-semibold text-gray-900 mb-2">Pro Tip</h3>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Use the advanced 2D to 3D converter for better control over
+                    depth estimation and mesh quality.
+                  </p>
+                  <Link href="/creator/2d-to-3d">
+                    <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white">
+                      Try it now
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             </motion.div>

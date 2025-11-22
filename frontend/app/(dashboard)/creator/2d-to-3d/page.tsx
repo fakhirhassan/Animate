@@ -3,9 +3,6 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronRight,
-  Home,
-  Box,
   Sparkles,
   Play,
   Loader2,
@@ -13,7 +10,6 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import ImageUploader from '@/components/creator/ImageUploader';
 import ConversionSettings, {
@@ -184,34 +180,23 @@ export default function TwoDToThreeDPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Breadcrumbs */}
-            <nav className="flex items-center gap-2 text-sm">
-              <Link
-                href="/creator"
-                className="text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                <Home className="h-4 w-4" />
-              </Link>
-              <ChevronRight className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-900 font-medium">2D to 3D Conversion</span>
-            </nav>
-
-            {/* Page Title */}
-            <div className="flex items-center gap-2">
-              <Box className="h-5 w-5 text-blue-500" />
-              <span className="font-semibold text-gray-900">Model Generator</span>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+      {/* Page Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-8"
+      >
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          2D to 3D Converter
+        </h1>
+        <p className="text-gray-500">
+          Transform your 2D images into stunning 3D models with AI
+        </p>
+      </motion.div>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-6xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Upload & Settings */}
           <div className="lg:col-span-1 space-y-6">
@@ -403,7 +388,7 @@ export default function TwoDToThreeDPage() {
             </motion.div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
