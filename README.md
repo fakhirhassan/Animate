@@ -206,9 +206,6 @@ This is a FYP (Final Year Project) at 30% completion. Future updates will includ
 This project is part of an academic final year project.
 
 ## Contact
-
-For questions or support, please reach out to the development team.
+Fakhirhassanllc@gmail.com
 
 ---
-
-Built with ❤️ using Next.js 14 and modern web technologies.
