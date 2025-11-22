@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Sparkles, Github, Twitter, Linkedin, Mail } from 'lucide-react';
+import { Github, Twitter, Linkedin, Mail } from 'lucide-react';
+import Logo from '@/components/shared/Logo';
 
 export default function Footer() {
   const footerLinks = {
@@ -32,14 +33,9 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-8">
           {/* Brand */}
           <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center space-x-2 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-gray-900">
-                AniMate
-              </span>
-            </Link>
+            <div className="mb-4">
+              <Logo size="md" variant="full" animated={false} showTagline={true} theme="light" />
+            </div>
             <p className="text-gray-600 mb-6 max-w-sm leading-relaxed">
               Transform your ideas into stunning animations with AI-powered technology.
               Create, innovate, and animate effortlessly.
@@ -119,10 +115,10 @@ export default function Footer() {
         <div className="pt-8 border-t border-gray-200">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-600 text-sm">
-              © {new Date().getFullYear()} AniMate. All rights reserved.
+              © {new Date().getFullYear()} ANIAD. All rights reserved.
             </p>
             <p className="text-gray-600 text-sm mt-2 md:mt-0">
-              Built with passion by the AniMate Team
+              Built with passion by the ANIAD Team
             </p>
           </div>
         </div>

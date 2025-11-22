@@ -7,11 +7,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import Link from 'next/link';
-import { Mail, Lock, Eye, EyeOff, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
+import Logo, { LogoMark } from '@/components/shared/Logo';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -131,14 +132,14 @@ export default function LoginPage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="inline-flex items-center justify-center w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 mb-4"
+              className="mb-4"
             >
-              <Sparkles className="h-8 w-8 text-white" />
+              <LogoMark size="lg" animated={true} />
             </motion.div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Welcome Back
             </h1>
-            <p className="text-gray-600">Sign in to continue to AniMate</p>
+            <p className="text-gray-600">Sign in to continue to ANIAD</p>
           </div>
 
           {/* Success Message */}

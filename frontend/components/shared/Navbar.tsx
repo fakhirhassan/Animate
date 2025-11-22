@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Menu, X, Sparkles } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import Logo from '@/components/shared/Logo';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -21,18 +22,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2 group">
-            <motion.div
-              whileHover={{ rotate: 180 }}
-              transition={{ duration: 0.5 }}
-              className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center"
-            >
-              <Sparkles className="h-5 w-5 text-white" />
-            </motion.div>
-            <span className="text-2xl font-bold text-gray-900">
-              AniMate
-            </span>
-          </Link>
+          <Logo size="md" variant="full" animated={true} theme="light" />
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">

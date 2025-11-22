@@ -11,7 +11,6 @@ import {
   Maximize2,
   Download,
   Loader2,
-  Box,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import * as THREE from 'three';
@@ -156,13 +155,28 @@ export default function ModelViewer({
                 </Suspense>
               </Canvas>
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <Box className="h-16 w-16 text-gray-600" />
-                <p className="text-gray-400 text-sm mt-4">
-                  No model to display
-                </p>
-                <p className="text-gray-500 text-xs mt-1">
-                  Upload an image and convert to see the 3D model
+              <Canvas camera={{ position: [0, 0, 4], fov: 50 }}>
+                <Suspense fallback={null}>
+                  <ambientLight intensity={0.3} />
+                  <pointLight position={[10, 10, 10]} intensity={0.5} />
+                  <mesh rotation={[0.5, 0.5, 0]}>
+                    <boxGeometry args={[1.5, 1.5, 1.5]} />
+                    <meshStandardMaterial
+                      color="#4a5568"
+                      wireframe
+                      transparent
+                      opacity={0.6}
+                    />
+                  </mesh>
+                  <OrbitControls autoRotate autoRotateSpeed={1} enableZoom={false} />
+                </Suspense>
+              </Canvas>
+            )}
+            {/* Empty state overlay */}
+            {!modelUrl && !isLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <p className="text-gray-300 text-sm font-medium bg-gray-900/70 px-4 py-2 rounded-lg">
+                  Upload an image to generate 3D model
                 </p>
               </div>
             )}

@@ -53,31 +53,8 @@ export default function TwoDToThreeDPage() {
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
 
-  // Mock history data
-  const [history, setHistory] = useState<ConversionHistoryItem[]>([
-    {
-      id: '1',
-      originalImage: '/placeholder-original.jpg',
-      thumbnailUrl: '/placeholder-thumb.jpg',
-      modelUrl: '/model-1.glb',
-      fileName: 'character_sprite.png',
-      format: 'glb',
-      quality: 'high',
-      createdAt: new Date(Date.now() - 3600000),
-      fileSize: '2.4 MB',
-    },
-    {
-      id: '2',
-      originalImage: '/placeholder-original-2.jpg',
-      thumbnailUrl: '/placeholder-thumb-2.jpg',
-      modelUrl: '/model-2.glb',
-      fileName: 'game_asset.jpg',
-      format: 'obj',
-      quality: 'medium',
-      createdAt: new Date(Date.now() - 86400000),
-      fileSize: '1.8 MB',
-    },
-  ]);
+  // History data - starts empty, populated after real conversions
+  const [history, setHistory] = useState<ConversionHistoryItem[]>([]);
 
   // Handlers
   const handleFilesChange = useCallback((files: UploadedFile[]) => {
@@ -134,15 +111,16 @@ export default function TwoDToThreeDPage() {
       message: 'Conversion complete!',
     });
 
-    // Set mock model URL - in production this would come from the API
-    setModelUrl('/models/sample.glb');
+    // Note: In production, the modelUrl would come from the backend API
+    // For now, we show a demo message since no real conversion happens
+    // setModelUrl(responseFromApi.modelUrl);
 
-    // Add to history
+    // Add to history (without model URL until backend is connected)
     const newHistoryItem: ConversionHistoryItem = {
       id: `history-${Date.now()}`,
       originalImage: selectedFile.preview,
       thumbnailUrl: selectedFile.preview,
-      modelUrl: '/models/sample.glb',
+      modelUrl: '', // Will be populated when backend returns actual model
       fileName: selectedFile.file.name,
       format: settings.outputFormat,
       quality: settings.quality,
@@ -162,8 +140,11 @@ export default function TwoDToThreeDPage() {
   };
 
   const handleViewHistoryItem = (item: ConversionHistoryItem) => {
-    setModelUrl(item.modelUrl);
-    // Find and set the original file if available
+    // Only set modelUrl if the item has a valid model URL
+    if (item.modelUrl && item.modelUrl.length > 0) {
+      setModelUrl(item.modelUrl);
+      setConversion({ status: 'completed', progress: 100, message: '' });
+    }
   };
 
   const handleDownloadHistoryItem = (item: ConversionHistoryItem) => {
