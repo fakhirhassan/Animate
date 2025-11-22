@@ -342,8 +342,11 @@ class MeshGenerator:
     def _export_placeholder(self, mesh: Dict, output_path: str, format: str) -> bool:
         """Export placeholder mesh to OBJ format."""
         try:
-            # Simple OBJ export
-            obj_path = output_path.replace(f'.{format}', '.obj')
+            # Simple OBJ export - ensure .obj extension
+            if format != 'obj':
+                obj_path = output_path.replace(f'.{format}', '.obj')
+            else:
+                obj_path = output_path
 
             with open(obj_path, 'w') as f:
                 f.write('# AniMate 3D Model\n')

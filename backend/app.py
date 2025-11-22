@@ -188,7 +188,7 @@ app = create_app()
 
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5000))
+    port = int(os.getenv('PORT', 5001))  # Use 5001 to avoid macOS AirPlay conflict
     debug = os.getenv('FLASK_ENV', 'development') == 'development'
 
     app.run(

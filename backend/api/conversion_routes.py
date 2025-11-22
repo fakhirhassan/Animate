@@ -104,13 +104,15 @@ def convert_2d_to_3d():
 @bp.route('/download/<job_id>', methods=['GET'])
 def download_model(job_id):
     """
-    Download the generated 3D model.
+    Download or view the generated 3D model.
 
     Args:
         job_id: Unique job identifier
+        Query params:
+            - download: If 'true', force download. Otherwise serve for viewing.
 
     Returns:
-        3D model file for download
+        3D model file
     """
     try:
         # Validate job_id format
@@ -121,6 +123,10 @@ def download_model(job_id):
 
         # Find the output file
         output_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'output')
+
+        if not os.path.exists(output_folder):
+            return error_response('Output folder not found', 404)
+
         output_files = [f for f in os.listdir(output_folder) if f.startswith(job_id)]
 
         if not output_files:
@@ -131,17 +137,20 @@ def download_model(job_id):
         # Determine MIME type based on file extension
         extension = os.path.splitext(output_files[0])[1].lower()
         mime_types = {
-            '.obj': 'model/obj',
+            '.obj': 'text/plain',  # OBJ is text-based, easier for browsers to handle
             '.glb': 'model/gltf-binary',
             '.gltf': 'model/gltf+json',
             '.fbx': 'application/octet-stream'
         }
         mime_type = mime_types.get(extension, 'application/octet-stream')
 
+        # Check if user wants to download or just view
+        force_download = request.args.get('download', 'false').lower() == 'true'
+
         return send_file(
             output_path,
             mimetype=mime_type,
-            as_attachment=True,
+            as_attachment=force_download,
             download_name=f'animate_model_{job_id[:8]}{extension}'
         )
 

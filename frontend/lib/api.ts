@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base API URL for Flask backend
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 // Create axios instance
 const api = axios.create({
@@ -88,6 +88,38 @@ export const animationAPI = {
   download: (jobId: string) => api.get(`/animation/download/${jobId}`, {
     responseType: 'blob',
   }),
+};
+
+// 2D to 3D Conversion API
+export const conversionAPI = {
+  // Convert 2D image to 3D model
+  convert: async (file: File, options: {
+    quality?: 'low' | 'medium' | 'high';
+    outputFormat?: 'obj' | 'glb';
+  } = {}) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('quality', options.quality || 'medium');
+    formData.append('output_format', options.outputFormat || 'obj');
+
+    return api.post('/convert/2d-to-3d', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Get conversion status
+  getStatus: (jobId: string) => api.get(`/convert/status/${jobId}`),
+
+  // Download converted model
+  download: (jobId: string) => api.get(`/convert/download/${jobId}`, {
+    responseType: 'blob',
+  }),
+
+  // Get model file URL
+  getModelUrl: (jobId: string) => `${API_BASE_URL}/convert/download/${jobId}`,
+
+  // Get supported formats
+  getSupportedFormats: () => api.get('/convert/supported-formats'),
 };
 
 export default api;

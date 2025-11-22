@@ -19,6 +19,9 @@ import ModelViewer from '@/components/creator/ModelViewer';
 import ConversionHistory, {
   ConversionHistoryItem,
 } from '@/components/creator/ConversionHistory';
+import { conversionAPI } from '@/lib/api';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 interface UploadedFile {
   id: string;
@@ -92,73 +95,82 @@ export default function TwoDToThreeDPage() {
     setModelUrl(null);
   }, []);
 
-  const simulateConversion = async () => {
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const performConversion = async () => {
     if (!selectedFile) return;
 
-    // Stage 1: Uploading
-    setConversion({ status: 'uploading', progress: 0, message: 'Uploading image...' });
-    await new Promise((r) => setTimeout(r, 800));
-    setConversion({ status: 'uploading', progress: 30, message: 'Analyzing image...' });
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      // Stage 1: Uploading
+      setConversion({ status: 'uploading', progress: 10, message: 'Uploading image...' });
 
-    // Stage 2: Processing
-    setConversion({
-      status: 'processing',
-      progress: 40,
-      message: 'Estimating depth map...',
-    });
-    await new Promise((r) => setTimeout(r, 1000));
-    setConversion({
-      status: 'processing',
-      progress: 60,
-      message: 'Generating mesh geometry...',
-    });
-    await new Promise((r) => setTimeout(r, 1200));
-    setConversion({
-      status: 'processing',
-      progress: 80,
-      message: 'Applying textures...',
-    });
-    await new Promise((r) => setTimeout(r, 800));
-    setConversion({
-      status: 'processing',
-      progress: 95,
-      message: 'Finalizing model...',
-    });
-    await new Promise((r) => setTimeout(r, 500));
+      // Call the Flask API
+      const response = await conversionAPI.convert(selectedFile.file, {
+        quality: settings.quality,
+        outputFormat: 'obj', // Use OBJ for now as it's simpler
+      });
 
-    // Stage 3: Completed
-    setConversion({
-      status: 'completed',
-      progress: 100,
-      message: 'Conversion complete!',
-    });
+      setConversion({ status: 'processing', progress: 50, message: 'Processing...' });
 
-    // Set mock model URL - in production this would come from the API
-    setModelUrl('/models/sample.glb');
+      if (response.data.success) {
+        const resultJobId = response.data.data.job_id;
+        setJobId(resultJobId);
 
-    // Add to history
-    const newHistoryItem: ConversionHistoryItem = {
-      id: `history-${Date.now()}`,
-      originalImage: selectedFile.preview,
-      thumbnailUrl: selectedFile.preview,
-      modelUrl: '/models/sample.glb',
-      fileName: selectedFile.file.name,
-      format: settings.outputFormat,
-      quality: settings.quality,
-      createdAt: new Date(),
-      fileSize: `${(Math.random() * 3 + 1).toFixed(1)} MB`,
-    };
-    setHistory((prev) => [newHistoryItem, ...prev]);
+        // Build the model URL
+        const modelDownloadUrl = `${API_BASE_URL}/convert/download/${resultJobId}`;
+        setModelUrl(modelDownloadUrl);
+
+        setConversion({
+          status: 'completed',
+          progress: 100,
+          message: 'Conversion complete!',
+        });
+
+        // Add to history
+        const newHistoryItem: ConversionHistoryItem = {
+          id: resultJobId,
+          originalImage: selectedFile.preview,
+          thumbnailUrl: selectedFile.preview,
+          modelUrl: modelDownloadUrl,
+          fileName: selectedFile.file.name,
+          format: 'obj',
+          quality: settings.quality,
+          createdAt: new Date(),
+          fileSize: response.data.data.metadata?.file_size || 'Unknown',
+        };
+        setHistory((prev) => [newHistoryItem, ...prev]);
+      } else {
+        throw new Error(response.data.message || 'Conversion failed');
+      }
+    } catch (error: any) {
+      console.error('Conversion error:', error);
+      setConversion({
+        status: 'error',
+        progress: 0,
+        message: error.response?.data?.message || error.message || 'Conversion failed. Is the Flask server running?',
+      });
+    }
   };
 
   const handleConvert = () => {
-    simulateConversion();
+    performConversion();
   };
 
-  const handleDownload = () => {
-    // In production, this would trigger actual file download
-    console.log('Downloading model...');
+  const handleDownload = async () => {
+    if (!jobId) return;
+
+    try {
+      // Use the download URL with ?download=true query param
+      const downloadUrl = `${API_BASE_URL}/convert/download/${jobId}?download=true`;
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `model_${jobId.slice(0, 8)}.obj`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download error:', error);
+    }
   };
 
   const handleViewHistoryItem = (item: ConversionHistoryItem) => {
