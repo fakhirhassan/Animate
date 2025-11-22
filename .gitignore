@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.pyo
+*.pyd
+venv/
+env/
+.venv/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+*.egg-info/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.pytest_cache/
+htmlcov/
+
+# Uploads (keep structure, ignore files)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Model weights (large files)
+backend/models/two_d_to_three_d/model_weights/*
+!backend/models/two_d_to_three_d/model_weights/.gitkeep
+
+# Database
+*.db
+*.sqlite3
+backend/database/migrations/versions/
+
+# Misc
+*.bak
+*.tmp

@@ -1,0 +1,111 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+uploads/
+!uploads/.gitkeep
+logs/
+!logs/.gitkeep
+*.log
+
+# Model weights (download separately)
+models/two_d_to_three_d/model_weights/*.pt
+models/two_d_to_three_d/model_weights/*.pth
+models/two_d_to_three_d/model_weights/*.onnx
+models/two_d_to_three_d/model_weights/*.bin
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Secret files
+secrets.json
+credentials.json
+*.pem
+*.key
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Generated documentation
+docs/_build/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Sentry
+.sentryclirc
