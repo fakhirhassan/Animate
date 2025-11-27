@@ -43,47 +43,40 @@ export default function LoginPage() {
     setSuccess(false);
 
     try {
-      // Simulate API delay for better UX
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Call backend API for login
+      const response = await fetch('http://localhost:5001/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
+      });
 
-      // Check localStorage for existing users
-      const existingUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      const foundUser = existingUsers.find(
-        (u: { email: string; password: string }) =>
-          u.email === data.email && u.password === data.password
-      );
+      const result = await response.json();
 
-      if (!foundUser) {
-        setError('Invalid email or password. Please try again.');
+      if (!response.ok) {
+        setError(result.message || 'Invalid email or password. Please try again.');
         setIsLoading(false);
         return;
       }
 
-      // Create user object without password
-      const userWithoutPassword = {
-        id: foundUser.id,
-        name: foundUser.name,
-        email: foundUser.email,
-        role: foundUser.role,
-      };
-
-      // Generate mock token
-      const mockToken = `token-${Date.now()}-${Math.random().toString(36).substring(2)}`;
-
-      login(userWithoutPassword, mockToken);
+      // Login successful - store user data and token
+      const { user, token } = result.data;
+      login(user, token);
       setSuccess(true);
 
-      // Redirect based on role after brief success message
-      setTimeout(() => {
-        if (foundUser.role === 'admin') {
-          router.push('/admin');
-        } else {
-          router.push('/creator');
-        }
-      }, 1500);
+      // Redirect based on role immediately after login
+      if (user.role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/creator');
+      }
     } catch (err: unknown) {
       console.error('Login error:', err);
-      setError('Login failed. Please try again.');
+      setError('Failed to connect to server. Please try again.');
     } finally {
       setIsLoading(false);
     }

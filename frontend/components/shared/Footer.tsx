@@ -7,8 +7,9 @@ import Logo from '@/components/shared/Logo';
 export default function Footer() {
   const footerLinks = {
     product: [
-      { label: 'Features', href: '#features' },
-      { label: 'How It Works', href: '#how-it-works' },
+      { label: 'Features', href: '/features' },
+      { label: 'How It Works', href: '/how-it-works' },
+      { label: 'Pricing', href: '#pricing' },
     ],
     company: [
       { label: 'About', href: '/about' },
