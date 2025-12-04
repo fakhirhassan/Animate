@@ -39,7 +39,7 @@ export default function TwoDToThreeDPage() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [settings, setSettings] = useState<ConversionSettingsData>({
     quality: 'medium',
-    outputFormat: 'glb',
+    outputFormat: 'obj',
     withTexture: true,
     depthEstimation: 50,
     smoothness: 50,
@@ -69,74 +69,135 @@ export default function TwoDToThreeDPage() {
     setModelUrl(null);
   }, []);
 
-  const simulateConversion = async () => {
+  const performConversion = async () => {
     if (!selectedFile) return;
 
-    // Stage 1: Uploading
-    setConversion({ status: 'uploading', progress: 0, message: 'Uploading image...' });
-    await new Promise((r) => setTimeout(r, 800));
-    setConversion({ status: 'uploading', progress: 30, message: 'Analyzing image...' });
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      // Create FormData
+      const formData = new FormData();
+      formData.append('file', selectedFile.file);
+      formData.append('output_format', settings.outputFormat);
+      formData.append('quality', settings.quality);
 
-    // Stage 2: Processing
-    setConversion({
-      status: 'processing',
-      progress: 40,
-      message: 'Estimating depth map...',
-    });
-    await new Promise((r) => setTimeout(r, 1000));
-    setConversion({
-      status: 'processing',
-      progress: 60,
-      message: 'Generating mesh geometry...',
-    });
-    await new Promise((r) => setTimeout(r, 1200));
-    setConversion({
-      status: 'processing',
-      progress: 80,
-      message: 'Applying textures...',
-    });
-    await new Promise((r) => setTimeout(r, 800));
-    setConversion({
-      status: 'processing',
-      progress: 95,
-      message: 'Finalizing model...',
-    });
-    await new Promise((r) => setTimeout(r, 500));
+      // Stage 1: Uploading with real progress tracking
+      const xhr = new XMLHttpRequest();
 
-    // Stage 3: Completed
-    setConversion({
-      status: 'completed',
-      progress: 100,
-      message: 'Conversion complete!',
-    });
+      // Track upload progress
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = Math.round((e.loaded / e.total) * 30); // 0-30%
+          setConversion({
+            status: 'uploading',
+            progress: percentComplete,
+            message: `Uploading image... ${percentComplete}%`,
+          });
+        }
+      });
 
-    // Note: In production, the modelUrl would come from the backend API
-    // For now, we show a demo message since no real conversion happens
-    // setModelUrl(responseFromApi.modelUrl);
+      // Handle completion
+      const response = await new Promise<Response>((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            // Upload complete, now processing
+            setConversion({
+              status: 'uploading',
+              progress: 30,
+              message: 'Upload complete! Processing...',
+            });
 
-    // Add to history (without model URL until backend is connected)
-    const newHistoryItem: ConversionHistoryItem = {
-      id: `history-${Date.now()}`,
-      originalImage: selectedFile.preview,
-      thumbnailUrl: selectedFile.preview,
-      modelUrl: '', // Will be populated when backend returns actual model
-      fileName: selectedFile.file.name,
-      format: settings.outputFormat,
-      quality: settings.quality,
-      createdAt: new Date(),
-      fileSize: `${(Math.random() * 3 + 1).toFixed(1)} MB`,
-    };
-    setHistory((prev) => [newHistoryItem, ...prev]);
+            // Convert XHR response to fetch Response
+            resolve(new Response(xhr.responseText, {
+              status: xhr.status,
+              statusText: xhr.statusText,
+              headers: new Headers({
+                'Content-Type': 'application/json',
+              }),
+            }));
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Upload failed'));
+        xhr.ontimeout = () => reject(new Error('Upload timed out'));
+
+        xhr.open('POST', 'http://localhost:5001/api/convert/2d-to-3d');
+        xhr.send(formData);
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Conversion failed');
+      }
+
+      const result = await response.json();
+
+      // Stage 2: Processing stages with visual feedback
+      setConversion({
+        status: 'processing',
+        progress: 50,
+        message: 'Estimating depth map...',
+      });
+      await new Promise((r) => setTimeout(r, 500));
+
+      setConversion({
+        status: 'processing',
+        progress: 70,
+        message: 'Generating 3D mesh...',
+      });
+      await new Promise((r) => setTimeout(r, 500));
+
+      setConversion({
+        status: 'processing',
+        progress: 90,
+        message: 'Finalizing model...',
+      });
+      await new Promise((r) => setTimeout(r, 300));
+
+      // Stage 3: Completed
+      setConversion({
+        status: 'completed',
+        progress: 100,
+        message: 'Conversion complete!',
+      });
+
+      // Set the download URL for the model
+      if (result.success && result.data.download_url) {
+        const downloadUrl = `http://localhost:5001${result.data.download_url}`;
+        setModelUrl(downloadUrl);
+
+        // Add to history
+        const newHistoryItem: ConversionHistoryItem = {
+          id: result.data.job_id || `history-${Date.now()}`,
+          originalImage: selectedFile.preview,
+          thumbnailUrl: selectedFile.preview,
+          modelUrl: downloadUrl,
+          fileName: selectedFile.file.name,
+          format: settings.outputFormat,
+          quality: settings.quality,
+          createdAt: new Date(),
+          fileSize: `${(selectedFile.file.size / 1024 / 1024).toFixed(2)} MB`,
+        };
+        setHistory((prev) => [newHistoryItem, ...prev]);
+      }
+    } catch (error) {
+      console.error('Conversion error:', error);
+      setConversion({
+        status: 'error',
+        progress: 0,
+        message: error instanceof Error ? error.message : 'Conversion failed. Please try again.',
+      });
+    }
   };
 
   const handleConvert = () => {
-    simulateConversion();
+    performConversion();
   };
 
   const handleDownload = () => {
-    // In production, this would trigger actual file download
-    console.log('Downloading model...');
+    if (modelUrl) {
+      window.open(modelUrl, '_blank');
+    }
   };
 
   const handleViewHistoryItem = (item: ConversionHistoryItem) => {
@@ -148,7 +209,9 @@ export default function TwoDToThreeDPage() {
   };
 
   const handleDownloadHistoryItem = (item: ConversionHistoryItem) => {
-    console.log('Downloading:', item.fileName);
+    if (item.modelUrl) {
+      window.open(item.modelUrl, '_blank');
+    }
   };
 
   const handleDeleteHistoryItem = (id: string) => {
@@ -161,7 +224,7 @@ export default function TwoDToThreeDPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+    <div className="min-h-screen bg-gradient-to-b from-white via-blue-50/30 to-white p-6 lg:p-8 pt-6 lg:pt-8">
       {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -229,7 +292,7 @@ export default function TwoDToThreeDPage() {
                   conversion.status === 'processing' ||
                   conversion.status === 'uploading'
                 }
-                className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-medium"
+                className="w-full h-12 gradient-button text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 {conversion.status === 'uploading' || conversion.status === 'processing' ? (
                   <>

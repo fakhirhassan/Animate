@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useRef, useState } from 'react';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls, Stage, useGLTF, Grid, Environment } from '@react-three/drei';
+import { Suspense, useRef, useState, useEffect } from 'react';
+import { Canvas, useThree, useFrame, useLoader } from '@react-three/fiber';
+import { OrbitControls, Grid, Environment, useGLTF } from '@react-three/drei';
 import { motion } from 'framer-motion';
 import {
   RotateCcw,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import * as THREE from 'three';
+import { OBJLoader } from 'three-stdlib';
 
 interface ModelViewerProps {
   modelUrl: string | null;
@@ -23,10 +24,80 @@ interface ModelViewerProps {
 }
 
 function Model({ url }: { url: string }) {
+  const modelRef = useRef<THREE.Group>(null);
+  const [modelObject, setModelObject] = useState<THREE.Group | null>(null);
+
+  useEffect(() => {
+    // Detect file format from URL
+    const isOBJ = url.toLowerCase().endsWith('.obj');
+
+    if (isOBJ) {
+      // Load OBJ file
+      const loader = new OBJLoader();
+      loader.load(
+        url,
+        (obj) => {
+          // Center and scale the model
+          const box = new THREE.Box3().setFromObject(obj);
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const scale = 2 / maxDim;
+
+          obj.position.sub(center);
+          obj.scale.set(scale, scale, scale);
+
+          // Add materials if needed
+          obj.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              if (!child.material || Array.isArray(child.material)) {
+                child.material = new THREE.MeshStandardMaterial({
+                  color: 0x808080,
+                  roughness: 0.5,
+                  metalness: 0.1,
+                });
+              }
+            }
+          });
+
+          setModelObject(obj);
+        },
+        undefined,
+        (error) => {
+          console.error('Error loading OBJ:', error);
+        }
+      );
+    } else {
+      // For GLTF/GLB, we'll load it differently
+      // This is handled by the GLTFModel component below
+    }
+  }, [url]);
+
+  // Auto-rotate slowly
+  useFrame((state, delta) => {
+    if (modelRef.current) {
+      modelRef.current.rotation.y += delta * 0.2;
+    }
+  });
+
+  if (!modelObject) {
+    return null;
+  }
+
+  return (
+    <primitive
+      ref={modelRef}
+      object={modelObject}
+      scale={1}
+      position={[0, 0, 0]}
+    />
+  );
+}
+
+function GLTFModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   const modelRef = useRef<THREE.Group>(null);
 
-  // Auto-rotate slowly
   useFrame((state, delta) => {
     if (modelRef.current) {
       modelRef.current.rotation.y += delta * 0.2;

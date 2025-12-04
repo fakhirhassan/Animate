@@ -91,7 +91,7 @@ If you keep email confirmation enabled:
    ```sql
    -- Insert admin profile (replace USER_ID with the actual UUID)
    INSERT INTO users (id, email, name, role)
-   VALUES ('USER_ID', 'admin@aniad.com', 'Admin User', 'admin')
+   VALUES ('5dd13122-1d15-4dac-8819-8bec305e1d38', 'admin@aniad.com', 'Admin User', 'admin')
    ON CONFLICT (id) DO UPDATE SET role = 'admin';
    ```
 
