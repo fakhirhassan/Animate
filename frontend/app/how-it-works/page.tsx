@@ -240,14 +240,8 @@ function TwoDToThreeDSection() {
       transition={{ duration: 0.6 }}
       className="relative bg-gradient-to-br from-blue-500/20 to-emerald-500/20 border-2 border-blue-500/30 rounded-3xl p-8 md:p-12"
     >
-      {/* Badge */}
-      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 text-white text-sm font-medium mb-6">
-        <Sparkles className="h-4 w-4" />
-        30% FYP Implementation
-      </div>
-
       <h3 className="text-3xl font-bold text-white mb-4">
-        Bonus: 2D to 3D Conversion
+        2D to 3D Conversion
       </h3>
       <p className="text-gray-400 mb-8 max-w-2xl">
         Transform your 2D sketches and images into fully-textured 3D models using
@@ -413,7 +407,6 @@ export default function HowItWorksPage() {
             transition={{ duration: 0.6 }}
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/20 to-emerald-500/20 border border-blue-500/30 mb-6">
-              <Sparkles className="h-4 w-4 text-blue-400" />
               <span className="text-sm font-medium text-gray-300">
                 Simple & Powerful
               </span>

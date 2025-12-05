@@ -80,6 +80,7 @@ export default function AdminDashboard() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -115,38 +116,55 @@ export default function AdminDashboard() {
 
   const fetchDashboardData = async () => {
     try {
+      console.log('📊 Fetching admin dashboard data...');
+
       // Fetch stats from backend
       const statsResponse = await adminAPI.getSystemStats();
+      console.log('✅ Stats response:', statsResponse.data);
+
+      const statsData = statsResponse.data.data;
+      console.log('📈 Stats data:', statsData);
+      console.log('📊 Total Projects:', statsData.totalProjects);
+
       setStats({
-        totalUsers: statsResponse.data.data.totalUsers,
-        activeUsers: statsResponse.data.data.activeUsers,
-        totalProjects: statsResponse.data.data.totalProjects,
-        systemHealth: statsResponse.data.data.systemHealth,
+        totalUsers: statsData.totalUsers || 0,
+        activeUsers: statsData.activeUsers || 0,
+        totalProjects: statsData.totalProjects || 0,
+        systemHealth: statsData.systemHealth || 0,
       });
 
       // Fetch users from backend
       const usersResponse = await adminAPI.getUsers();
+      console.log('👥 Users response:', usersResponse.data);
       setUsers(usersResponse.data.data.users || []);
 
       // Fetch user growth data
       const growthResponse = await adminAPI.getUserGrowth(6);
+      console.log('📈 User growth response:', growthResponse.data);
       setUserGrowthData(growthResponse.data.data || []);
 
       // Fetch conversion activity data
       const activityResponse = await adminAPI.getConversionActivity(7);
+      console.log('🎬 Conversion activity response:', activityResponse.data);
       setConversionData(activityResponse.data.data || []);
 
       // Fetch recent activities
       const activitiesResponse = await adminAPI.getRecentActivities(10);
+      console.log('⚡ Recent activities response:', activitiesResponse.data);
       const activities = (activitiesResponse.data.data || []).map((activity: any) => ({
         ...activity,
         icon: activity.type === 'signup' ? UserPlus :
               activity.type === 'alert' ? AlertCircle : FileVideo
       }));
       setRecentActivities(activities);
+
+      console.log('✅ All dashboard data fetched successfully');
     } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
-      // Show error notification but keep loading state
+      console.error('❌ Failed to fetch dashboard data:', error);
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -222,6 +240,11 @@ export default function AdminDashboard() {
   const handleDeleteUser = (user: any) => {
     setSelectedUser(user);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleViewDetails = (user: any) => {
+    setSelectedUser(user);
+    setIsViewDialogOpen(true);
   };
 
   const handleToggleStatus = async (userId: string, currentStatus: string) => {
@@ -475,10 +498,6 @@ export default function AdminDashboard() {
                 Quick Actions
               </h3>
               <div className="space-y-3">
-                <Button onClick={handleAddUser} className="w-full justify-start bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white rounded-xl transition-all duration-300">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add New User
-                </Button>
                 <Button className="w-full justify-start bg-white/10 hover:bg-white/20 text-white border border-white/20 hover:border-white/30 rounded-xl transition-all duration-300">
                   <Video className="h-4 w-4 mr-2" />
                   View All Projects
@@ -582,20 +601,14 @@ export default function AdminDashboard() {
             <div className="border-b border-white/10 p-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-white">User Management</h2>
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input
-                      placeholder="Search users..."
-                      className="pl-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500 w-64 focus:ring-2 focus:ring-blue-500 rounded-xl"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-                  <Button className="bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add User
-                  </Button>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search users..."
+                    className="pl-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500 w-64 focus:ring-2 focus:ring-blue-500 rounded-xl"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
@@ -659,7 +672,12 @@ export default function AdminDashboard() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="bg-[#1a1a3e] border-white/10">
-                              <DropdownMenuItem className="hover:bg-white/10 text-gray-300 hover:text-white">View Details</DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleViewDetails(user)}
+                                className="hover:bg-white/10 text-gray-300 hover:text-white"
+                              >
+                                View Details
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleEditUser(user)}
                                 className="hover:bg-white/10 text-gray-300 hover:text-white"
@@ -884,6 +902,94 @@ export default function AdminDashboard() {
               className="bg-red-500 hover:bg-red-600"
             >
               Delete User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View User Details Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="bg-[#1a1a3e] border-white/10 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>User Details</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Complete information about this user
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {selectedUser && (
+              <div className="space-y-6">
+                {/* User Avatar and Basic Info */}
+                <div className="flex items-center gap-4 p-4 bg-white/5 rounded-lg border border-white/10">
+                  <Avatar className="w-16 h-16 border-2 border-blue-500/30">
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500/20 to-emerald-500/20 text-blue-400 font-semibold text-xl">
+                      {selectedUser.name.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">{selectedUser.name}</h3>
+                    <p className="text-gray-400">{selectedUser.email}</p>
+                  </div>
+                </div>
+
+                {/* User Information Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <p className="text-sm text-gray-400 mb-1">User ID</p>
+                    <p className="text-white font-medium">{selectedUser.id}</p>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <p className="text-sm text-gray-400 mb-1">Role</p>
+                    <Badge className="bg-blue-500/20 text-blue-400 border-0 capitalize font-medium">
+                      {selectedUser.role}
+                    </Badge>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <p className="text-sm text-gray-400 mb-1">Status</p>
+                    <Badge
+                      className={
+                        selectedUser.status === 'active'
+                          ? 'bg-emerald-500/20 text-emerald-400 border-0 font-medium'
+                          : 'bg-gray-500/20 text-gray-400 border-0 font-medium'
+                      }
+                    >
+                      {selectedUser.status}
+                    </Badge>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                    <p className="text-sm text-gray-400 mb-1">Joined Date</p>
+                    <p className="text-white font-medium">{selectedUser.joinedAt}</p>
+                  </div>
+                </div>
+
+                {/* Statistics */}
+                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <h4 className="text-sm font-semibold text-white mb-3">Activity Statistics</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-400">Projects</p>
+                      <p className="text-2xl font-bold text-white">{selectedUser.projects}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400">Total Conversions</p>
+                      <p className="text-2xl font-bold text-white">{selectedUser.projects * 2 || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-400">Last Active</p>
+                      <p className="text-sm font-medium text-white">Today</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsViewDialogOpen(false)}
+              className="border-white/10 text-gray-400 hover:bg-white/5"
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

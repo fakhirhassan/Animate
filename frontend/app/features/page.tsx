@@ -64,7 +64,6 @@ const features: Feature[] = [
     title: '2D to 3D Converter',
     description:
       'Transform your 2D sketches into fully textured 3D models using AI-powered depth estimation.',
-    badge: '30% FYP',
   },
   {
     icon: Film,
@@ -215,7 +214,6 @@ export default function FeaturesPage() {
             transition={{ duration: 0.6 }}
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/20 to-emerald-500/20 border border-blue-500/30 mb-6">
-              <Sparkles className="h-4 w-4 text-blue-400" />
               <span className="text-sm font-medium text-gray-300">
                 AI-Powered Animation Platform
               </span>
@@ -290,7 +288,7 @@ export default function FeaturesPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-600 via-blue-700 to-emerald-600 overflow-hidden">
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-500 to-emerald-500 overflow-hidden">
         {/* Background decoration */}
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
         <div className="absolute top-0 left-0 w-full h-full">
