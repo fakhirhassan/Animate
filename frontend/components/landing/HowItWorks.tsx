@@ -26,8 +26,18 @@ export default function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="py-24 bg-gradient-to-b from-white to-blue-50/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="how-it-works" className="py-24 bg-[#0a0a1f] relative overflow-hidden">
+      {/* Animated Grid Background - Same as Features page */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a3e_1px,transparent_1px),linear-gradient(to_bottom,#1a1a3e_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+
+      {/* Animated Background Blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-500" />
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -36,10 +46,10 @@ export default function HowItWorks() {
           transition={{ duration: 0.6 }}
           className="text-center mb-20"
         >
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
             How It Works
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-xl text-gray-400 max-w-2xl mx-auto">
             Create professional animations in three simple steps
           </p>
         </motion.div>
@@ -47,7 +57,7 @@ export default function HowItWorks() {
         {/* Steps */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
           {/* Connection line - hidden on mobile */}
-          <div className="hidden md:block absolute top-16 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-200 via-purple-200 to-blue-200"></div>
+          <div className="hidden md:block absolute top-16 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500/30 via-emerald-500/30 to-blue-500/30"></div>
 
           {steps.map((step, index) => {
             const Icon = step.icon;
@@ -64,23 +74,23 @@ export default function HowItWorks() {
                   {/* Number Badge */}
                   <div className="relative mb-6">
                     {/* Large number background */}
-                    <div className="absolute -top-4 -left-4 text-8xl font-bold text-blue-50/50 select-none">
+                    <div className="absolute -top-4 -left-4 text-8xl font-bold text-blue-500/10 select-none">
                       {step.number}
                     </div>
 
                     {/* Icon Container */}
-                    <div className="relative w-20 h-20 rounded-2xl bg-white shadow-lg flex items-center justify-center border border-gray-100 group-hover:scale-110 transition-transform duration-300 z-10">
-                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                    <div className="relative w-20 h-20 rounded-2xl bg-white/5 backdrop-blur-sm shadow-lg flex items-center justify-center border border-white/10 group-hover:scale-110 transition-transform duration-300 z-10">
+                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center">
                         <Icon className="h-8 w-8 text-white" />
                       </div>
                     </div>
                   </div>
 
                   {/* Content */}
-                  <h3 className="text-2xl font-semibold text-gray-900 mb-3">
+                  <h3 className="text-2xl font-semibold text-white mb-3">
                     {step.title}
                   </h3>
-                  <p className="text-gray-600 leading-relaxed max-w-sm">
+                  <p className="text-gray-400 leading-relaxed max-w-sm">
                     {step.description}
                   </p>
                 </div>

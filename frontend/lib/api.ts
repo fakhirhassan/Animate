@@ -69,13 +69,50 @@ export const projectsAPI = {
 
 // Admin API
 export const adminAPI = {
-  getUsers: () => api.get('/admin/users'),
+  getUsers: (params?: { limit?: number; offset?: number }) =>
+    api.get('/admin/users', { params }),
 
   updateUser: (id: string, data: any) => api.put(`/admin/users/${id}`, data),
 
   deleteUser: (id: string) => api.delete(`/admin/users/${id}`),
 
   getSystemStats: () => api.get('/admin/stats'),
+
+  getUserGrowth: (months?: number) =>
+    api.get('/admin/analytics/user-growth', { params: { months } }),
+
+  getConversionActivity: (days?: number) =>
+    api.get('/admin/analytics/conversions', { params: { days } }),
+
+  getRecentActivities: (limit?: number) =>
+    api.get('/admin/activities', { params: { limit } }),
+};
+
+// Conversion API (2D to 3D)
+export const conversionAPI = {
+  convert2Dto3D: (formData: FormData) =>
+    api.post('/convert/2d-to-3d', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  getHistory: (params?: { limit?: number; offset?: number; status?: string }) =>
+    api.get('/convert/history', { params }),
+
+  getConversionById: (id: string) => api.get(`/convert/history/${id}`),
+
+  deleteConversion: (id: string) => api.delete(`/convert/history/${id}`),
+
+  getStats: () => api.get('/convert/stats'),
+
+  getStatus: (jobId: string) => api.get(`/convert/status/${jobId}`),
+
+  downloadModel: (jobId: string, download: boolean = true) =>
+    api.get(`/convert/download/${jobId}`, {
+      params: { download: download.toString() },
+      responseType: download ? 'blob' : undefined,
+    }),
+
+  getSupportedFormats: () => api.get('/convert/supported-formats'),
 };
 
 // Animation API

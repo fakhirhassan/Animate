@@ -1,10 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Settings2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -17,9 +14,6 @@ export interface ConversionSettingsData {
   quality: 'low' | 'medium' | 'high';
   outputFormat: 'obj' | 'fbx' | 'glb';
   withTexture: boolean;
-  depthEstimation: number;
-  smoothness: number;
-  detailLevel: number;
 }
 
 interface ConversionSettingsProps {
@@ -33,8 +27,6 @@ export default function ConversionSettings({
   onChange,
   disabled = false,
 }: ConversionSettingsProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
   const updateSetting = <K extends keyof ConversionSettingsData>(
     key: K,
     value: ConversionSettingsData[K]
@@ -100,7 +92,7 @@ export default function ConversionSettings({
         <div>
           <Label className="text-gray-700 font-medium">Include Texture</Label>
           <p className="text-xs text-gray-500 mt-1">
-            Apply original colors to the 3D model
+            Apply original colors to the 3D model (Note: texture baking is experimental)
           </p>
         </div>
         <button
@@ -118,111 +110,6 @@ export default function ConversionSettings({
             transition={{ type: 'spring', stiffness: 500, damping: 30 }}
           />
         </button>
-      </div>
-
-      {/* Advanced Settings */}
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <button
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Settings2 className="h-4 w-4 text-gray-500" />
-            <span className="font-medium text-gray-700">Advanced Settings</span>
-          </div>
-          <motion.div
-            animate={{ rotate: showAdvanced ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <ChevronDown className="h-5 w-5 text-gray-500" />
-          </motion.div>
-        </button>
-
-        <AnimatePresence>
-          {showAdvanced && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="border-t border-gray-200"
-            >
-              <div className="p-4 space-y-6">
-                {/* Depth Estimation */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-gray-600">Depth Estimation</Label>
-                    <span className="text-sm text-gray-500">
-                      {settings.depthEstimation}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={settings.depthEstimation}
-                    onChange={(e) =>
-                      updateSetting('depthEstimation', parseInt(e.target.value))
-                    }
-                    disabled={disabled}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
-                  <p className="text-xs text-gray-400">
-                    Controls the perceived depth of the 3D model
-                  </p>
-                </div>
-
-                {/* Smoothness */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-gray-600">Smoothness</Label>
-                    <span className="text-sm text-gray-500">
-                      {settings.smoothness}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={settings.smoothness}
-                    onChange={(e) =>
-                      updateSetting('smoothness', parseInt(e.target.value))
-                    }
-                    disabled={disabled}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
-                  <p className="text-xs text-gray-400">
-                    Higher values create smoother surfaces
-                  </p>
-                </div>
-
-                {/* Detail Level */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-gray-600">Detail Level</Label>
-                    <span className="text-sm text-gray-500">
-                      {settings.detailLevel}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={settings.detailLevel}
-                    onChange={(e) =>
-                      updateSetting('detailLevel', parseInt(e.target.value))
-                    }
-                    disabled={disabled}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
-                  <p className="text-xs text-gray-400">
-                    Higher values preserve more surface details
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   );

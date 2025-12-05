@@ -112,8 +112,9 @@ const benefits: Benefit[] = [
 function AnimatedBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-200/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-200/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-500" />
     </div>
   );
 }
@@ -131,11 +132,11 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
       transition={{ duration: 0.5, delay: index * 0.1 }}
       className="group relative"
     >
-      <div className="h-full bg-white/80 backdrop-blur-sm border border-gray-200 rounded-2xl p-8 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
+      <div className="h-full bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:shadow-2xl hover:shadow-blue-500/20 hover:-translate-y-2 transition-all duration-300">
         {/* Badge */}
         {feature.badge && (
           <div className="absolute top-4 right-4">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-emerald-500 text-white">
               {feature.badge}
             </span>
           </div>
@@ -143,21 +144,21 @@ function FeatureCard({ feature, index }: { feature: Feature; index: number }) {
 
         {/* Icon */}
         <div className="mb-6">
-          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
             <Icon className="h-7 w-7 text-white" />
           </div>
         </div>
 
         {/* Content */}
-        <h3 className="text-xl font-semibold text-gray-900 mb-3">
+        <h3 className="text-xl font-semibold text-white mb-3">
           {feature.title}
         </h3>
-        <p className="text-gray-600 leading-relaxed mb-4">
+        <p className="text-gray-400 leading-relaxed mb-4">
           {feature.description}
         </p>
 
         {/* Hover effect gradient border */}
-        <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-500 opacity-0 group-hover:opacity-10 transition-opacity duration-300 pointer-events-none" />
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-500 to-emerald-500 opacity-0 group-hover:opacity-10 transition-opacity duration-300 pointer-events-none" />
       </div>
     </motion.div>
   );
@@ -176,14 +177,14 @@ function BenefitCard({ benefit, index }: { benefit: Benefit; index: number }) {
       transition={{ duration: 0.4, delay: index * 0.1 }}
       className="flex-1 min-w-[250px]"
     >
-      <div className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-xl p-6 h-full hover:shadow-lg transition-shadow duration-300">
-        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center mb-4">
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6 h-full hover:shadow-lg hover:shadow-blue-500/20 transition-shadow duration-300">
+        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center mb-4">
           <Icon className="h-6 w-6 text-white" />
         </div>
-        <h4 className="text-lg font-semibold text-gray-900 mb-2">
+        <h4 className="text-lg font-semibold text-white mb-2">
           {benefit.title}
         </h4>
-        <p className="text-gray-600 text-sm">{benefit.description}</p>
+        <p className="text-gray-400 text-sm">{benefit.description}</p>
       </div>
     </motion.div>
   );
@@ -199,7 +200,10 @@ export default function FeaturesPage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[#0a0a1f]">
+      {/* Animated Grid Background */}
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#1a1a3e_1px,transparent_1px),linear-gradient(to_bottom,#1a1a3e_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
         <AnimatedBackground />
@@ -210,22 +214,22 @@ export default function FeaturesPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-100 mb-6">
-              <Sparkles className="h-4 w-4 text-blue-500" />
-              <span className="text-sm font-medium text-gray-700">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-500/20 to-emerald-500/20 border border-blue-500/30 mb-6">
+              <Sparkles className="h-4 w-4 text-blue-400" />
+              <span className="text-sm font-medium text-gray-300">
                 AI-Powered Animation Platform
               </span>
             </div>
 
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-6">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6">
               Powerful Features for
               <br />
-              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
                 Effortless Animation
               </span>
             </h1>
 
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-8 leading-relaxed">
+            <p className="text-xl text-gray-400 max-w-3xl mx-auto mb-8 leading-relaxed">
               Everything you need to create professional animations with AI.
               From script to screen, ANIAD handles it all.
             </p>
@@ -234,7 +238,7 @@ export default function FeaturesPage() {
       </section>
 
       {/* Features Grid */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50">
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -243,10 +247,10 @@ export default function FeaturesPage() {
             transition={{ duration: 0.5 }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-4xl font-bold text-white mb-4">
               Complete Animation Pipeline
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
               Eight powerful modules working together to bring your stories to life
             </p>
           </motion.div>
@@ -260,7 +264,7 @@ export default function FeaturesPage() {
       </section>
 
       {/* Key Benefits Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -269,10 +273,10 @@ export default function FeaturesPage() {
             transition={{ duration: 0.5 }}
             className="text-center mb-16"
           >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-4xl font-bold text-white mb-4">
               Why Choose ANIAD?
             </h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            <p className="text-lg text-gray-400 max-w-2xl mx-auto">
               The smartest way to create professional animations
             </p>
           </motion.div>
@@ -286,7 +290,7 @@ export default function FeaturesPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-600 via-purple-600 to-blue-700 relative overflow-hidden">
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-600 via-blue-700 to-emerald-600 overflow-hidden">
         {/* Background decoration */}
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
         <div className="absolute top-0 left-0 w-full h-full">

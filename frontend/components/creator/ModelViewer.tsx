@@ -28,15 +28,22 @@ function Model({ url }: { url: string }) {
   const [modelObject, setModelObject] = useState<THREE.Group | null>(null);
 
   useEffect(() => {
+    console.log('[ModelViewer] Loading model from URL:', url);
+
     // Detect file format from URL
     const isOBJ = url.toLowerCase().endsWith('.obj');
+    console.log('[ModelViewer] Is OBJ file:', isOBJ);
 
     if (isOBJ) {
       // Load OBJ file
       const loader = new OBJLoader();
+      console.log('[ModelViewer] Starting OBJ load...');
+
       loader.load(
         url,
         (obj) => {
+          console.log('[ModelViewer] OBJ loaded successfully!', obj);
+
           // Center and scale the model
           const box = new THREE.Box3().setFromObject(obj);
           const center = box.getCenter(new THREE.Vector3());
@@ -60,16 +67,20 @@ function Model({ url }: { url: string }) {
             }
           });
 
+          console.log('[ModelViewer] Setting model object');
           setModelObject(obj);
         },
-        undefined,
+        (progress) => {
+          console.log('[ModelViewer] Loading progress:', (progress.loaded / progress.total) * 100 + '%');
+        },
         (error) => {
-          console.error('Error loading OBJ:', error);
+          console.error('[ModelViewer] Error loading OBJ:', error);
         }
       );
     } else {
       // For GLTF/GLB, we'll load it differently
       // This is handled by the GLTFModel component below
+      console.log('[ModelViewer] Not an OBJ file, skipping');
     }
   }, [url]);
 
@@ -142,6 +153,11 @@ export default function ModelViewer({
   const [zoom, setZoom] = useState(1);
   const [autoRotate, setAutoRotate] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.2, 3));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.2, 0.5));
@@ -149,6 +165,37 @@ export default function ModelViewer({
     setZoom(1);
     setAutoRotate(true);
   };
+
+  // Don't render Canvas on server
+  if (!isMounted) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {originalImage && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-gray-600">Original 2D</h4>
+              <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
+                <img
+                  src={originalImage}
+                  alt="Original 2D"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-gray-600">Generated 3D</h4>
+            <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg overflow-hidden border border-gray-200 relative">
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+                <p className="text-white text-sm mt-4">Loading viewer...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -222,7 +269,7 @@ export default function ModelViewer({
                   />
 
                   <CameraController zoom={zoom} />
-                  <Environment preset="city" />
+                  {/* Environment component removed - was causing HDR loading errors */}
                 </Suspense>
               </Canvas>
             ) : (

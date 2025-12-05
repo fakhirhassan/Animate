@@ -32,6 +32,12 @@ const navItems = [
     description: 'Convert images to 3D models',
   },
   {
+    name: 'Assets',
+    href: '/creator/assets',
+    icon: FolderOpen,
+    description: 'View and manage your 3D models',
+  },
+  {
     name: 'Projects',
     href: '/creator/projects',
     icon: FolderOpen,
@@ -72,24 +78,24 @@ export default function CreatorLayout({
   return (
     <div className="min-h-screen">
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/80 backdrop-blur-sm border-b border-gray-200 z-50 px-4 flex items-center justify-between">
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#0a0a1f] backdrop-blur-sm border-b border-white/10 z-50 px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
           >
-            <Menu className="h-5 w-5 text-gray-600" />
+            <Menu className="h-5 w-5 text-gray-400" />
           </button>
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-purple-500" />
-            <span className="font-semibold text-gray-900">AniMate</span>
+            <Sparkles className="h-5 w-5 text-blue-500" />
+            <span className="font-semibold text-white">AniMate</span>
           </div>
         </div>
         <Button
           variant="ghost"
           size="sm"
           onClick={handleLogout}
-          className="text-gray-600 hover:text-red-600"
+          className="text-gray-400 hover:text-red-600"
         >
           <LogOut className="h-4 w-4" />
         </Button>
@@ -111,7 +117,7 @@ export default function CreatorLayout({
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="lg:hidden fixed left-0 top-0 bottom-0 w-[280px] bg-white z-50 shadow-xl"
+              className="lg:hidden fixed left-0 top-0 bottom-0 w-[280px] bg-[#0a0a1f] z-50 shadow-xl"
             >
               <MobileSidebar
                 user={user}
@@ -126,7 +132,7 @@ export default function CreatorLayout({
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[260px] bg-white border-r border-gray-200 flex-col z-40">
+      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[260px] bg-[#0a0a1f] border-r border-white/10 flex-col z-40">
         <DesktopSidebar
           user={user}
           pathname={pathname}
@@ -157,12 +163,12 @@ function DesktopSidebar({
   return (
     <>
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-100">
+      <div className="h-16 flex items-center px-6 border-b border-white/10">
         <Link href="/creator" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center">
             <Sparkles className="h-4 w-4 text-white" />
           </div>
-          <span className="font-bold text-xl text-gray-900">AniMate</span>
+          <span className="font-bold text-xl text-white">AniMate</span>
         </Link>
       </div>
 
@@ -178,16 +184,16 @@ function DesktopSidebar({
       </nav>
 
       {/* User Section */}
-      <div className="p-4 border-t border-gray-100">
+      <div className="p-4 border-t border-white/10">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white font-medium text-sm">
+          <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-emerald-400 rounded-full flex items-center justify-center text-white font-medium text-sm">
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
+            <p className="text-sm font-medium text-white truncate">
               {user?.name || 'User'}
             </p>
-            <p className="text-xs text-gray-500 truncate">
+            <p className="text-xs text-gray-400 truncate">
               {user?.email || 'user@example.com'}
             </p>
           </div>
@@ -195,7 +201,7 @@ function DesktopSidebar({
         <Button
           variant="ghost"
           onClick={onLogout}
-          className="w-full justify-start text-gray-600 hover:text-red-600 hover:bg-red-50"
+          className="w-full justify-start text-gray-400 hover:text-red-400 hover:bg-red-500/10"
         >
           <LogOut className="h-4 w-4 mr-2" />
           Log out
@@ -221,18 +227,18 @@ function MobileSidebar({
   return (
     <>
       {/* Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-gray-100">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center">
             <Sparkles className="h-4 w-4 text-white" />
           </div>
-          <span className="font-bold text-xl text-gray-900">AniMate</span>
+          <span className="font-bold text-xl text-white">AniMate</span>
         </div>
         <button
           onClick={onClose}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
         >
-          <X className="h-5 w-5 text-gray-600" />
+          <X className="h-5 w-5 text-gray-400" />
         </button>
       </div>
 
@@ -249,16 +255,16 @@ function MobileSidebar({
       </nav>
 
       {/* User Section */}
-      <div className="p-4 border-t border-gray-100">
+      <div className="p-4 border-t border-white/10">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white font-medium text-sm">
+          <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-emerald-400 rounded-full flex items-center justify-center text-white font-medium text-sm">
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
+            <p className="text-sm font-medium text-white truncate">
               {user?.name || 'User'}
             </p>
-            <p className="text-xs text-gray-500 truncate">
+            <p className="text-xs text-gray-400 truncate">
               {user?.email || 'user@example.com'}
             </p>
           </div>
@@ -266,7 +272,7 @@ function MobileSidebar({
         <Button
           variant="ghost"
           onClick={onLogout}
-          className="w-full justify-start text-gray-600 hover:text-red-600 hover:bg-red-50"
+          className="w-full justify-start text-gray-400 hover:text-red-400 hover:bg-red-500/10"
         >
           <LogOut className="h-4 w-4 mr-2" />
           Log out
@@ -289,10 +295,10 @@ function NavItem({
 
   if (item.disabled) {
     return (
-      <div className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 cursor-not-allowed">
+      <div className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 cursor-not-allowed">
         <Icon className="h-5 w-5" />
         <span className="font-medium text-sm">{item.name}</span>
-        <span className="ml-auto text-[10px] uppercase tracking-wide bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
+        <span className="ml-auto text-[10px] uppercase tracking-wide bg-white/10 text-gray-500 px-1.5 py-0.5 rounded">
           Soon
         </span>
       </div>
@@ -307,8 +313,8 @@ function NavItem({
         relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
         ${
           isActive
-            ? 'bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? 'bg-gradient-to-r from-blue-500/20 to-emerald-500/20 text-white'
+            : 'text-gray-400 hover:bg-white/10 hover:text-white'
         }
       `}
     >
@@ -316,16 +322,16 @@ function NavItem({
       {isActive && (
         <motion.div
           layoutId="activeIndicator"
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-gradient-to-b from-purple-500 to-pink-500 rounded-r-full"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-gradient-to-b from-blue-500 to-emerald-500 rounded-r-full"
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         />
       )}
 
-      <Icon className={`h-5 w-5 ${isActive ? 'text-purple-600' : ''}`} />
+      <Icon className={`h-5 w-5 ${isActive ? 'text-blue-400' : ''}`} />
       <span className="font-medium text-sm">{item.name}</span>
 
       {isActive && (
-        <ChevronRight className="h-4 w-4 ml-auto text-purple-400" />
+        <ChevronRight className="h-4 w-4 ml-auto text-emerald-400" />
       )}
     </Link>
   );

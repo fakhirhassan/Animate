@@ -5,7 +5,7 @@ Main application entry point for AI-powered animation generation.
 
 import os
 import logging
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -45,6 +45,12 @@ def create_app(config_name=None):
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"],
             "supports_credentials": True
+        },
+        r"/uploads/*": {
+            "origins": app.config['CORS_ORIGINS'],
+            "methods": ["GET", "OPTIONS"],
+            "allow_headers": ["Content-Type"],
+            "supports_credentials": False
         }
     })
 
@@ -79,6 +85,13 @@ def create_app(config_name=None):
                 'auth': '/api/auth',
             }
         }), 200
+
+    # Serve uploaded files (images and models)
+    @app.route('/uploads/<path:filename>', methods=['GET'])
+    def serve_upload(filename):
+        """Serve uploaded files (images, models, etc.)"""
+        upload_folder = app.config['UPLOAD_FOLDER']
+        return send_from_directory(upload_folder, filename)
 
     app.logger.info(f'AniMate backend started in {config_name} mode')
 

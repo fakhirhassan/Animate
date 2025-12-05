@@ -7,6 +7,7 @@ import logging
 from flask import Blueprint, request
 from supabase_client.supabase_config import get_supabase
 from utils.response_formatter import success_response, error_response
+from services.admin_stats_service import AdminStatsService
 from functools import wraps
 
 # Create blueprint
@@ -64,30 +65,13 @@ def get_stats():
         System statistics including user counts, project counts, etc.
     """
     try:
-        supabase = get_supabase()
+        admin_service = AdminStatsService()
+        result = admin_service.get_system_stats()
 
-        # Get total users count
-        users_response = supabase.table('users').select('id', count='exact').execute()
-        total_users = users_response.count or 0
+        if not result['success']:
+            return error_response(result.get('message', 'Failed to fetch statistics'), 500)
 
-        # Get active users (users with is_active=true)
-        active_users_response = supabase.table('users').select('id', count='exact').eq('is_active', True).execute()
-        active_users = active_users_response.count or 0
-
-        # Get total conversions/projects
-        conversions_response = supabase.table('conversions').select('id', count='exact').execute()
-        total_projects = conversions_response.count or 0
-
-        # Calculate system health (simplified - 100% minus error rate)
-        # In production, this would include actual system metrics
-        system_health = 98  # Placeholder
-
-        return success_response({
-            'totalUsers': total_users,
-            'activeUsers': active_users,
-            'totalProjects': total_projects,
-            'systemHealth': system_health
-        })
+        return success_response(result['data'])
 
     except Exception as e:
         logger.error(f'Get stats error: {str(e)}')
@@ -101,52 +85,24 @@ def get_users():
     Get all users for admin dashboard.
 
     Query Parameters:
-        - limit: Number of users to return (default: 100)
+        - limit: Number of users to return (default: 50)
         - offset: Offset for pagination (default: 0)
-        - search: Search query for name or email
 
     Returns:
         List of all users with their details
     """
     try:
-        supabase = get_supabase()
-
         # Get query parameters
-        limit = request.args.get('limit', 100, type=int)
+        limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
-        search = request.args.get('search', '')
 
-        # Build query
-        query = supabase.table('users').select('*')
+        admin_service = AdminStatsService()
+        result = admin_service.get_users_list(limit, offset)
 
-        # Add search filter if provided
-        if search:
-            query = query.or_(f'name.ilike.%{search}%,email.ilike.%{search}%')
+        if not result['success']:
+            return error_response(result.get('message', 'Failed to fetch users'), 500)
 
-        # Execute query with pagination
-        users_response = query.range(offset, offset + limit - 1).execute()
-
-        # Count conversions for each user
-        users = []
-        for user in users_response.data:
-            # Get project count for this user
-            conversions_response = supabase.table('conversions').select('id', count='exact').eq('user_id', user['id']).execute()
-            project_count = conversions_response.count or 0
-
-            users.append({
-                'id': user['id'],
-                'name': user['name'],
-                'email': user['email'],
-                'role': user['role'],
-                'status': 'active' if user.get('is_active', True) else 'inactive',
-                'projects': project_count,
-                'joinedAt': user['created_at'][:10] if user.get('created_at') else 'N/A'
-            })
-
-        return success_response({
-            'users': users,
-            'total': len(users)
-        })
+        return success_response(result['data'])
 
     except Exception as e:
         logger.error(f'Get users error: {str(e)}')
@@ -225,3 +181,87 @@ def delete_user(user_id):
     except Exception as e:
         logger.error(f'Delete user error: {str(e)}')
         return error_response('Failed to delete user', 500)
+
+
+@bp.route('/analytics/user-growth', methods=['GET'])
+@admin_required
+def get_user_growth():
+    """
+    Get user growth data for analytics dashboard.
+
+    Query Parameters:
+        - months: Number of months to include (default: 6)
+
+    Returns:
+        Monthly user growth data
+    """
+    try:
+        months = request.args.get('months', 6, type=int)
+
+        admin_service = AdminStatsService()
+        result = admin_service.get_user_growth_data(months)
+
+        if not result['success']:
+            return error_response(result.get('message', 'Failed to fetch user growth data'), 500)
+
+        return success_response(result['data'])
+
+    except Exception as e:
+        logger.error(f'Get user growth error: {str(e)}')
+        return error_response('Failed to fetch user growth data', 500)
+
+
+@bp.route('/analytics/conversions', methods=['GET'])
+@admin_required
+def get_conversion_activity():
+    """
+    Get conversion activity data for analytics dashboard.
+
+    Query Parameters:
+        - days: Number of days to include (default: 7)
+
+    Returns:
+        Daily conversion activity data
+    """
+    try:
+        days = request.args.get('days', 7, type=int)
+
+        admin_service = AdminStatsService()
+        result = admin_service.get_conversion_activity(days)
+
+        if not result['success']:
+            return error_response(result.get('message', 'Failed to fetch conversion activity'), 500)
+
+        return success_response(result['data'])
+
+    except Exception as e:
+        logger.error(f'Get conversion activity error: {str(e)}')
+        return error_response('Failed to fetch conversion activity', 500)
+
+
+@bp.route('/activities', methods=['GET'])
+@admin_required
+def get_recent_activities():
+    """
+    Get recent system activities for admin dashboard.
+
+    Query Parameters:
+        - limit: Maximum number of activities to return (default: 10)
+
+    Returns:
+        List of recent activities
+    """
+    try:
+        limit = request.args.get('limit', 10, type=int)
+
+        admin_service = AdminStatsService()
+        result = admin_service.get_recent_activities(limit)
+
+        if not result['success']:
+            return error_response(result.get('message', 'Failed to fetch recent activities'), 500)
+
+        return success_response(result['data'])
+
+    except Exception as e:
+        logger.error(f'Get recent activities error: {str(e)}')
+        return error_response('Failed to fetch recent activities', 500)

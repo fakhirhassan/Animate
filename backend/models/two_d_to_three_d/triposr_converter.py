@@ -1,186 +1,229 @@
 """
 TripoSR Converter
-High-quality 2D to 3D conversion using TripoSR model from Stability AI.
+Converts 2D images to proper 3D models using TripoSR.
 """
 
 import os
+import sys
 import logging
-from typing import Dict, Any, Optional
-from PIL import Image
 import numpy as np
+import torch
+from PIL import Image
+import rembg
+from typing import Optional
+import trimesh
+
+# Add TripoSR to Python path
+triposr_path = os.path.join(os.path.dirname(__file__), '..', '..', 'TripoSR_temp')
+if os.path.exists(triposr_path) and triposr_path not in sys.path:
+    sys.path.insert(0, triposr_path)
+
+from tsr.system import TSR
+from tsr.utils import remove_background, resize_foreground
 
 logger = logging.getLogger(__name__)
-
-# Check if TripoSR dependencies are available
-TRIPOSR_AVAILABLE = False
-try:
-    import torch
-    from transformers import pipeline
-    TRIPOSR_AVAILABLE = True
-    logger.info('TripoSR dependencies available')
-except ImportError as e:
-    logger.warning(f'TripoSR dependencies not available: {e}')
 
 
 class TripoSRConverter:
     """
-    TripoSR-based 2D to 3D converter.
-
-    TripoSR is a state-of-the-art model that generates high-quality 3D meshes
-    from single images in seconds.
+    TripoSR-based converter that generates proper 3D models from 2D images.
+    Unlike MiDaS which creates 2.5D relief models, TripoSR generates true 3D
+    geometry with 360° viewability.
     """
 
-    def __init__(self, model_name: str = "stabilityai/TripoSR"):
-        """
-        Initialize TripoSR converter.
-
-        Args:
-            model_name: HuggingFace model identifier
-        """
-        self.model_name = model_name
+    def __init__(self):
+        """Initialize the TripoSR converter."""
         self.model = None
         self.device = None
+        self.rembg_session = None
         self._initialized = False
-
-        logger.info(f'TripoSRConverter created with model: {model_name}')
+        logger.info('TripoSRConverter created')
 
     def initialize(self) -> bool:
         """
         Initialize the TripoSR model.
 
         Returns:
-            True if successful, False otherwise
+            True if initialization successful, False otherwise
         """
-        if not TRIPOSR_AVAILABLE:
-            logger.error('TripoSR dependencies not available')
-            return False
-
         try:
+            logger.info('Initializing TripoSR model...')
+
             # Set device
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
             logger.info(f'Using device: {self.device}')
 
-            # Load TripoSR model from HuggingFace
-            logger.info(f'Loading TripoSR model from {self.model_name}...')
-            try:
-                # Try to load as image-to-3d pipeline
-                from diffusers import DiffusionPipeline
-                self.model = DiffusionPipeline.from_pretrained(
-                    self.model_name,
-                    trust_remote_code=True,
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
-                )
-                self.model.to(self.device)
-                logger.info('TripoSR model loaded successfully')
-                self._initialized = True
-                return True
-            except Exception as model_error:
-                logger.warning(f'Could not load TripoSR as pipeline: {str(model_error)}')
-                logger.warning('TripoSR model not available - will use MiDaS fallback')
-                self._initialized = False
-                return False
+            # Load TripoSR model from HuggingFace (will use local cache if available)
+            logger.info('Loading TripoSR model...')
+            self.model = TSR.from_pretrained(
+                "stabilityai/TripoSR",
+                config_name="config.yaml",
+                weight_name="model.ckpt",
+            )
+
+            # Set chunk size for memory efficiency
+            # Lower values use less VRAM but are slower
+            self.model.renderer.set_chunk_size(8192)
+
+            # Move model to device
+            self.model.to(self.device)
+
+            # Initialize background removal
+            self.rembg_session = rembg.new_session()
+
+            self._initialized = True
+            logger.info('TripoSR model initialized successfully')
+            return True
 
         except Exception as e:
             logger.error(f'Failed to initialize TripoSR: {str(e)}')
             return False
 
-    def convert(
+    def preprocess_image(
         self,
         image: Image.Image,
-        remove_background: bool = True
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Convert 2D image to 3D mesh using TripoSR.
-
-        Args:
-            image: Input PIL Image
-            remove_background: Whether to remove background before conversion
-
-        Returns:
-            Dictionary with mesh data or None on failure
-        """
-        if not self._initialized:
-            if not self.initialize():
-                return None
-
-        try:
-            # Preprocess image
-            processed_image = self._preprocess_image(image, remove_background)
-
-            # For now, return placeholder since we need proper TripoSR setup
-            # In production:
-            # scene_codes = self.model([processed_image], device=str(self.device))
-            # meshes = self.model.extract_mesh(scene_codes)
-            # return {'mesh': meshes[0], 'success': True}
-
-            logger.info('TripoSR placeholder conversion')
-            return {
-                'success': True,
-                'mesh_type': 'triposr_placeholder',
-                'message': 'TripoSR model not fully initialized'
-            }
-
-        except Exception as e:
-            logger.error(f'TripoSR conversion error: {str(e)}')
-            return None
-
-    def _preprocess_image(
-        self,
-        image: Image.Image,
-        remove_background: bool
+        remove_bg: bool = True,
+        foreground_ratio: float = 0.85
     ) -> Image.Image:
         """
         Preprocess image for TripoSR.
 
         Args:
-            image: Input image
-            remove_background: Whether to remove background
+            image: Input PIL Image
+            remove_bg: Whether to remove background
+            foreground_ratio: Ratio of foreground to image size
 
         Returns:
-            Preprocessed image
+            Preprocessed PIL Image
         """
-        # Convert to RGB if necessary
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
+        try:
+            if remove_bg:
+                # Remove background
+                image = remove_background(image, self.rembg_session)
 
-        # Resize to appropriate size (TripoSR works best with 512x512)
-        max_size = 512
-        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                # Resize foreground
+                image = resize_foreground(image, foreground_ratio)
 
-        # Create square image with padding
-        size = max(image.size)
-        new_image = Image.new('RGB', (size, size), (255, 255, 255))
-        paste_pos = ((size - image.size[0]) // 2, (size - image.size[1]) // 2)
-        new_image.paste(image, paste_pos)
+                # Convert to RGB with gray background
+                image_array = np.array(image).astype(np.float32) / 255.0
+                image_array = image_array[:, :, :3] * image_array[:, :, 3:4] + \
+                             (1 - image_array[:, :, 3:4]) * 0.5
+                image = Image.fromarray((image_array * 255.0).astype(np.uint8))
+            else:
+                # Just ensure RGB
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
 
-        # Remove background if requested
-        if remove_background:
-            try:
-                from rembg import remove
-                new_image = remove(new_image)
-            except Exception as e:
-                logger.warning(f'Background removal failed: {e}, continuing without it')
+            return image
 
-        return new_image
+        except Exception as e:
+            logger.error(f'Error preprocessing image: {str(e)}')
+            raise
+
+    def convert(
+        self,
+        input_image: Image.Image,
+        output_path: str,
+        output_format: str = 'obj',
+        mc_resolution: int = 256,
+        remove_bg: bool = True,
+        bake_texture: bool = False,
+        texture_resolution: int = 2048
+    ) -> dict:
+        """
+        Convert 2D image to 3D model using TripoSR.
+
+        Args:
+            input_image: Input PIL Image
+            output_path: Path to save output model (without extension)
+            output_format: Output format ('obj' or 'glb')
+            mc_resolution: Marching cubes resolution (higher = more detail)
+            remove_bg: Whether to remove background from input
+            bake_texture: Whether to bake texture atlas
+            texture_resolution: Texture atlas resolution
+
+        Returns:
+            Dictionary with conversion results
+        """
+        try:
+            # Lazy initialization
+            if not self._initialized:
+                if not self.initialize():
+                    return {
+                        'success': False,
+                        'error': 'Failed to initialize TripoSR'
+                    }
+
+            logger.info('Starting TripoSR conversion...')
+
+            # Preprocess image
+            processed_image = self.preprocess_image(
+                input_image,
+                remove_bg=remove_bg
+            )
+            logger.info('Image preprocessed')
+
+            # Run TripoSR model
+            logger.info('Running TripoSR model inference...')
+            with torch.no_grad():
+                scene_codes = self.model([processed_image], device=self.device)
+            logger.info('Scene codes generated')
+
+            # Extract mesh using marching cubes
+            logger.info(f'Extracting mesh with resolution {mc_resolution}...')
+            meshes = self.model.extract_mesh(
+                scene_codes,
+                not bake_texture,  # vertex_color
+                resolution=mc_resolution
+            )
+            mesh = meshes[0]
+            logger.info(f'Mesh extracted: {len(mesh.vertices)} vertices, {len(mesh.faces)} faces')
+
+            # Export mesh
+            final_output_path = f'{output_path}.{output_format}'
+
+            if bake_texture:
+                # TODO: Implement texture baking if needed
+                # This requires xatlas and additional processing
+                logger.warning('Texture baking not yet implemented, saving with vertex colors')
+                mesh.export(final_output_path)
+            else:
+                mesh.export(final_output_path)
+
+            logger.info(f'Mesh exported to {final_output_path}')
+
+            return {
+                'success': True,
+                'output_path': final_output_path,
+                'format': output_format,
+                'metadata': {
+                    'vertex_count': len(mesh.vertices),
+                    'face_count': len(mesh.faces),
+                    'mc_resolution': mc_resolution,
+                    'has_texture': bake_texture
+                }
+            }
+
+        except Exception as e:
+            logger.error(f'TripoSR conversion error: {str(e)}')
+            return {
+                'success': False,
+                'error': str(e)
+            }
 
     def cleanup(self):
-        """Clean up model resources."""
-        if self.model is not None and TRIPOSR_AVAILABLE:
-            del self.model
+        """Clean up resources."""
+        if self.model is not None:
+            # Move model to CPU to free GPU memory
+            if self.device != 'cpu':
+                self.model.to('cpu')
             self.model = None
 
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
+        self.rembg_session = None
         self._initialized = False
-        logger.info('TripoSR converter cleaned up')
 
-    def get_info(self) -> Dict[str, Any]:
-        """Get converter information."""
-        return {
-            'model_name': self.model_name,
-            'initialized': self._initialized,
-            'device': str(self.device) if self.device else 'cpu',
-            'triposr_available': TRIPOSR_AVAILABLE,
-            'using_placeholder': self.model is None
-        }
+        # Clear CUDA cache if available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        logger.info('TripoSR converter cleaned up')
