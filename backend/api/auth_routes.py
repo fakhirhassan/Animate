@@ -479,3 +479,102 @@ def verify_otp():
     except Exception as e:
         logger.error(f'OTP verification error: {str(e)}')
         return error_response('OTP verification failed', 500)
+
+
+@bp.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    """
+    Send password reset email to user.
+
+    Request Body:
+        - email: User email
+
+    Returns:
+        Success message indicating reset email was sent
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return error_response('No data provided', 400)
+
+        email = data.get('email')
+
+        if not email:
+            return error_response('Email is required', 400)
+
+        # Get Supabase client
+        supabase = get_supabase()
+
+        # Send password reset email using Supabase Auth
+        # This will send an email with a reset link
+        supabase.auth.reset_password_for_email(email, {
+            'redirect_to': 'http://localhost:3000/reset-password'
+        })
+
+        return success_response({
+            'email': email,
+            'message': 'Password reset email sent'
+        }, f'Password reset instructions sent to {email}')
+
+    except Exception as e:
+        logger.error(f'Forgot password error: {str(e)}')
+        # Don't reveal if email exists or not for security
+        return success_response({
+            'email': email,
+            'message': 'If an account exists with this email, you will receive password reset instructions'
+        }, 'Password reset email sent')
+
+
+@bp.route('/reset-password', methods=['POST'])
+def reset_password():
+    """
+    Reset user password with token from email.
+
+    Request Body:
+        - token: Reset token from email
+        - password: New password
+
+    Returns:
+        Success message
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return error_response('No data provided', 400)
+
+        token = data.get('token')
+        new_password = data.get('password')
+
+        if not token or not new_password:
+            return error_response('Token and new password are required', 400)
+
+        if len(new_password) < 6:
+            return error_response('Password must be at least 6 characters', 400)
+
+        # Get Supabase client
+        supabase = get_supabase()
+
+        # Set the session with the access token first
+        # This authenticates the user with the reset token
+        session_response = supabase.auth.set_session(token, token)
+
+        if not session_response.user:
+            return error_response('Invalid or expired reset token', 400)
+
+        # Now update the user's password
+        auth_response = supabase.auth.update_user({
+            "password": new_password
+        })
+
+        if not auth_response.user:
+            return error_response('Failed to reset password', 400)
+
+        return success_response(None, 'Password reset successfully')
+
+    except Exception as e:
+        logger.error(f'Reset password error: {str(e)}')
+        if 'Invalid' in str(e) or 'expired' in str(e):
+            return error_response('Invalid or expired reset token', 400)
+        return error_response('Failed to reset password', 500)
