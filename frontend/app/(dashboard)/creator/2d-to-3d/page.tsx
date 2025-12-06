@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Sparkles,
   Play,
   Loader2,
   CheckCircle2,
@@ -342,7 +341,6 @@ export default function TwoDToThreeDPage() {
               className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg border border-white/10 p-6"
             >
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="h-5 w-5 text-blue-400" />
                 <h2 className="text-lg font-semibold text-white">Upload Images</h2>
               </div>
               <ImageUploader

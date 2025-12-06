@@ -38,7 +38,7 @@ export default function ConversionSettings({
     <div className="space-y-6">
       {/* Quality Selection */}
       <div className="space-y-3">
-        <Label className="text-gray-700 font-medium">Model Quality</Label>
+        <Label className="text-white font-medium">Model Quality</Label>
         <div className="grid grid-cols-3 gap-3">
           {(['low', 'medium', 'high'] as const).map((quality) => (
             <button
@@ -49,14 +49,14 @@ export default function ConversionSettings({
                 py-3 px-4 rounded-lg border-2 transition-all duration-200
                 ${
                   settings.quality === quality
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 hover:border-blue-200 text-gray-600'
+                    ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                    : 'border-white/20 hover:border-blue-400/40 text-gray-300'
                 }
                 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
               `}
             >
               <p className="font-medium capitalize">{quality}</p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 {quality === 'low' && 'Fast processing'}
                 {quality === 'medium' && 'Balanced'}
                 {quality === 'high' && 'Best quality'}
@@ -68,7 +68,7 @@ export default function ConversionSettings({
 
       {/* Output Format */}
       <div className="space-y-3">
-        <Label className="text-gray-700 font-medium">Output Format</Label>
+        <Label className="text-white font-medium">Output Format</Label>
         <Select
           value={settings.outputFormat}
           onValueChange={(value) =>
@@ -76,7 +76,7 @@ export default function ConversionSettings({
           }
           disabled={disabled}
         >
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full bg-white/5 border-white/20 text-white">
             <SelectValue placeholder="Select format" />
           </SelectTrigger>
           <SelectContent>
@@ -88,10 +88,10 @@ export default function ConversionSettings({
       </div>
 
       {/* Texture Toggle */}
-      <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+      <div className="flex items-center justify-between py-3 px-4 bg-white/5 border border-white/10 rounded-lg">
         <div>
-          <Label className="text-gray-700 font-medium">Include Texture</Label>
-          <p className="text-xs text-gray-500 mt-1">
+          <Label className="text-white font-medium">Include Texture</Label>
+          <p className="text-xs text-gray-400 mt-1">
             Apply original colors to the 3D model (Note: texture baking is experimental)
           </p>
         </div>
@@ -100,7 +100,7 @@ export default function ConversionSettings({
           disabled={disabled}
           className={`
             relative w-12 h-6 rounded-full transition-colors duration-200
-            ${settings.withTexture ? 'bg-blue-500' : 'bg-gray-300'}
+            ${settings.withTexture ? 'bg-blue-500' : 'bg-gray-600'}
             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           `}
         >
