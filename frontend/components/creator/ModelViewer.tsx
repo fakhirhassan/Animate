@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame, useLoader } from '@react-three/fiber';
-import { OrbitControls, Grid, Environment, useGLTF } from '@react-three/drei';
+import { OrbitControls, Grid } from '@react-three/drei';
 import { motion } from 'framer-motion';
 import {
   RotateCcw,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import * as THREE from 'three';
-import { OBJLoader } from 'three-stdlib';
+import { OBJLoader, GLTFLoader } from 'three-stdlib';
 
 interface ModelViewerProps {
   modelUrl: string | null;
@@ -23,75 +23,78 @@ interface ModelViewerProps {
   isLoading?: boolean;
 }
 
-function Model({ url }: { url: string }) {
+// Helper to detect file format from URL
+function getModelFormat(url: string): 'obj' | 'glb' | 'gltf' | 'unknown' {
+  const lowerUrl = url.toLowerCase();
+  if (lowerUrl.endsWith('.obj')) return 'obj';
+  if (lowerUrl.endsWith('.glb')) return 'glb';
+  if (lowerUrl.endsWith('.gltf')) return 'gltf';
+  // Check for API download URLs that don't have file extension
+  // The backend serves models without extension in URL
+  return 'unknown';
+}
+
+// OBJ Model Loader Component
+function OBJModel({ url }: { url: string }) {
   const modelRef = useRef<THREE.Group>(null);
   const [modelObject, setModelObject] = useState<THREE.Group | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('[ModelViewer] Loading model from URL:', url);
+    console.log('[ModelViewer] Loading OBJ model from URL:', url);
 
-    // Detect file format from URL
-    const isOBJ = url.toLowerCase().endsWith('.obj');
-    console.log('[ModelViewer] Is OBJ file:', isOBJ);
+    const loader = new OBJLoader();
 
-    if (isOBJ) {
-      // Load OBJ file
-      const loader = new OBJLoader();
-      console.log('[ModelViewer] Starting OBJ load...');
+    loader.load(
+      url,
+      (obj) => {
+        console.log('[ModelViewer] OBJ loaded successfully!', obj);
 
-      loader.load(
-        url,
-        (obj) => {
-          console.log('[ModelViewer] OBJ loaded successfully!', obj);
+        // Center and scale the model
+        const box = new THREE.Box3().setFromObject(obj);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = maxDim > 0 ? 2 / maxDim : 1;
 
-          // Center and scale the model
-          const box = new THREE.Box3().setFromObject(obj);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const scale = 2 / maxDim;
+        obj.position.sub(center);
+        obj.scale.set(scale, scale, scale);
 
-          obj.position.sub(center);
-          obj.scale.set(scale, scale, scale);
-
-          // Add materials if needed
-          obj.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              if (!child.material || Array.isArray(child.material)) {
-                child.material = new THREE.MeshStandardMaterial({
-                  color: 0x808080,
-                  roughness: 0.5,
-                  metalness: 0.1,
-                });
-              }
+        // Add materials if needed
+        obj.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            if (!child.material || Array.isArray(child.material)) {
+              child.material = new THREE.MeshStandardMaterial({
+                color: 0x808080,
+                roughness: 0.5,
+                metalness: 0.1,
+              });
             }
-          });
+          }
+        });
 
-          console.log('[ModelViewer] Setting model object');
-          setModelObject(obj);
-        },
-        (progress) => {
-          console.log('[ModelViewer] Loading progress:', (progress.loaded / progress.total) * 100 + '%');
-        },
-        (error) => {
-          console.error('[ModelViewer] Error loading OBJ:', error);
+        setModelObject(obj);
+        setError(null);
+      },
+      (progress) => {
+        if (progress.total > 0) {
+          console.log('[ModelViewer] OBJ Loading progress:', Math.round((progress.loaded / progress.total) * 100) + '%');
         }
-      );
-    } else {
-      // For GLTF/GLB, we'll load it differently
-      // This is handled by the GLTFModel component below
-      console.log('[ModelViewer] Not an OBJ file, skipping');
-    }
+      },
+      (err) => {
+        console.error('[ModelViewer] Error loading OBJ:', err);
+        setError('Failed to load OBJ model');
+      }
+    );
   }, [url]);
 
-  // Auto-rotate slowly
   useFrame((state, delta) => {
     if (modelRef.current) {
       modelRef.current.rotation.y += delta * 0.2;
     }
   });
 
-  if (!modelObject) {
+  if (error || !modelObject) {
     return null;
   }
 
@@ -105,9 +108,48 @@ function Model({ url }: { url: string }) {
   );
 }
 
+// GLTF/GLB Model Loader Component
 function GLTFModel({ url }: { url: string }) {
-  const { scene } = useGLTF(url);
   const modelRef = useRef<THREE.Group>(null);
+  const [clonedScene, setClonedScene] = useState<THREE.Group | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    console.log('[ModelViewer] Loading GLTF/GLB model from URL:', url);
+
+    const loader = new GLTFLoader();
+
+    loader.load(
+      url,
+      (gltf) => {
+        console.log('[ModelViewer] GLTF loaded successfully!', gltf);
+
+        const scene = gltf.scene.clone();
+
+        // Center and scale the model
+        const box = new THREE.Box3().setFromObject(scene);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = maxDim > 0 ? 2 / maxDim : 1;
+
+        scene.position.sub(center);
+        scene.scale.set(scale, scale, scale);
+
+        setClonedScene(scene);
+        setError(null);
+      },
+      (progress) => {
+        if (progress.total > 0) {
+          console.log('[ModelViewer] GLTF Loading progress:', Math.round((progress.loaded / progress.total) * 100) + '%');
+        }
+      },
+      (err) => {
+        console.error('[ModelViewer] Error loading GLTF:', err);
+        setError('Failed to load GLB/GLTF model');
+      }
+    );
+  }, [url]);
 
   useFrame((state, delta) => {
     if (modelRef.current) {
@@ -115,14 +157,77 @@ function GLTFModel({ url }: { url: string }) {
     }
   });
 
+  if (error || !clonedScene) {
+    return null;
+  }
+
   return (
     <primitive
       ref={modelRef}
-      object={scene}
+      object={clonedScene}
       scale={1}
       position={[0, 0, 0]}
     />
   );
+}
+
+// Universal Model Loader - automatically detects format and loads appropriately
+function Model({ url }: { url: string }) {
+  const [format, setFormat] = useState<'obj' | 'glb' | 'gltf' | 'unknown'>('unknown');
+  const [detectedFormat, setDetectedFormat] = useState<'obj' | 'glb' | 'gltf' | null>(null);
+
+  useEffect(() => {
+    const urlFormat = getModelFormat(url);
+    console.log('[ModelViewer] URL format detected:', urlFormat, 'from URL:', url);
+
+    if (urlFormat !== 'unknown') {
+      setFormat(urlFormat);
+      setDetectedFormat(urlFormat);
+    } else {
+      // For API URLs without extension, fetch headers to detect content type
+      // or try OBJ first (since that's what the current backend outputs by default)
+      console.log('[ModelViewer] Unknown format, attempting to detect from content-type...');
+
+      fetch(url, { method: 'HEAD' })
+        .then((response) => {
+          const contentType = response.headers.get('content-type') || '';
+          console.log('[ModelViewer] Content-Type:', contentType);
+
+          if (contentType.includes('gltf-binary') || contentType.includes('model/gltf')) {
+            setFormat('glb');
+            setDetectedFormat('glb');
+          } else if (contentType.includes('text/plain') || contentType.includes('model/obj')) {
+            setFormat('obj');
+            setDetectedFormat('obj');
+          } else {
+            // Default to trying OBJ first, then GLB
+            console.log('[ModelViewer] Could not detect format from content-type, trying OBJ first');
+            setFormat('obj');
+            setDetectedFormat('obj');
+          }
+        })
+        .catch((err) => {
+          console.error('[ModelViewer] Error detecting format:', err);
+          // Default to OBJ
+          setFormat('obj');
+          setDetectedFormat('obj');
+        });
+    }
+  }, [url]);
+
+  if (!detectedFormat) {
+    return null; // Still detecting format
+  }
+
+  if (format === 'obj') {
+    return <OBJModel url={url} />;
+  }
+
+  if (format === 'glb' || format === 'gltf') {
+    return <GLTFModel url={url} />;
+  }
+
+  return null;
 }
 
 function CameraController({ zoom }: { zoom: number }) {

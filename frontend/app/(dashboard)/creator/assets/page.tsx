@@ -408,7 +408,6 @@ export default function AssetsPage() {
               <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg overflow-hidden">
                 <ModelViewer
                   modelUrl={`http://localhost:5001${selectedAsset.model_url}`}
-                  format={selectedAsset.output_format}
                 />
               </div>
 

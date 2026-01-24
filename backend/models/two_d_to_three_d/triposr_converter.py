@@ -1,27 +1,43 @@
 """
 TripoSR Converter
 Converts 2D images to proper 3D models using TripoSR.
+
+Note: TripoSR requires the 'tsr' module to be installed.
+If not available, this converter will not work and the system
+will fall back to MiDaS depth estimation.
 """
 
 import os
 import sys
 import logging
-import numpy as np
-import torch
-from PIL import Image
-import rembg
 from typing import Optional
-import trimesh
-
-# Add TripoSR to Python path
-triposr_path = os.path.join(os.path.dirname(__file__), '..', '..', 'TripoSR_temp')
-if os.path.exists(triposr_path) and triposr_path not in sys.path:
-    sys.path.insert(0, triposr_path)
-
-from tsr.system import TSR
-from tsr.utils import remove_background, resize_foreground
 
 logger = logging.getLogger(__name__)
+
+# Try to import TripoSR dependencies
+TSR = None
+remove_background = None
+resize_foreground = None
+TRIPOSR_AVAILABLE = False
+
+try:
+    import numpy as np
+    import torch
+    from PIL import Image
+    import rembg
+    import trimesh
+
+    # Add TripoSR to Python path if it exists
+    triposr_path = os.path.join(os.path.dirname(__file__), 'tsr')
+    if os.path.exists(triposr_path) and triposr_path not in sys.path:
+        sys.path.insert(0, os.path.dirname(__file__))
+
+    from tsr.system import TSR
+    from tsr.utils import remove_background, resize_foreground
+    TRIPOSR_AVAILABLE = True
+    logger.info('TripoSR module loaded successfully')
+except ImportError as e:
+    logger.warning(f'TripoSR not available: {e}. Will use MiDaS fallback.')
 
 
 class TripoSRConverter:
@@ -37,7 +53,15 @@ class TripoSRConverter:
         self.device = None
         self.rembg_session = None
         self._initialized = False
-        logger.info('TripoSRConverter created')
+        self._available = TRIPOSR_AVAILABLE
+        if self._available:
+            logger.info('TripoSRConverter created')
+        else:
+            logger.warning('TripoSRConverter created but TripoSR module not available')
+
+    def is_available(self) -> bool:
+        """Check if TripoSR is available."""
+        return self._available
 
     def initialize(self) -> bool:
         """
@@ -46,6 +70,10 @@ class TripoSRConverter:
         Returns:
             True if initialization successful, False otherwise
         """
+        if not self._available:
+            logger.error('Cannot initialize: TripoSR module not available')
+            return False
+
         try:
             logger.info('Initializing TripoSR model...')
 
