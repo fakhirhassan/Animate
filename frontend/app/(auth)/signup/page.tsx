@@ -46,7 +46,6 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [step, setStep] = useState<SignupStep>('form');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [generatedOtp, setGeneratedOtp] = useState('');
   const [formData, setFormData] = useState<SignupFormData | null>(null);
   const [resendTimer, setResendTimer] = useState(0);
   const router = useRouter();
@@ -90,38 +89,44 @@ export default function SignupPage() {
     return 'Strong';
   };
 
-  // Generate 6-digit OTP
-  const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
-
-  // Send OTP (simulated - in production, call backend API)
-  const sendOTP = async (email: string) => {
-    const newOtp = generateOTP();
-    setGeneratedOtp(newOtp);
-
-    // In production, this would call your backend API to send email
-    // For demo, we'll show the OTP in console and alert
-    console.log(`OTP for ${email}: ${newOtp}`);
-
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Show OTP in alert for demo purposes
-    // In production, remove this and send via email
-    alert(`Demo Mode: Your OTP is ${newOtp}\n\nIn production, this would be sent to ${email}`);
-
-    // Start resend timer (60 seconds)
-    setResendTimer(60);
-    const interval = setInterval(() => {
-      setResendTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
+  // Send OTP via email using backend API
+  const sendOTP = async (email: string, name: string, password: string, isResend: boolean = false) => {
+    try {
+      const response = await fetch('http://localhost:5001/api/auth/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          name,
+          password,
+          is_resend: isResend,
+        }),
       });
-    }, 1000);
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to send OTP');
+      }
+
+      // Start resend timer (60 seconds)
+      setResendTimer(60);
+      const interval = setInterval(() => {
+        setResendTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return true;
+    } catch (error) {
+      throw error;
+    }
   };
 
   // Handle form submission (Step 1)
@@ -130,34 +135,17 @@ export default function SignupPage() {
     setError('');
 
     try {
-      // Call backend API for signup
-      const response = await fetch('http://localhost:5001/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-          name: data.name,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        setError(result.message || 'Failed to create account. Please try again.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Store form data and send OTP
+      // Store form data
       setFormData(data);
-      await sendOTP(data.email);
+
+      // Send OTP to user's email
+      await sendOTP(data.email, data.name, data.password);
+
+      // Move to OTP verification step
       setStep('otp');
     } catch (err: unknown) {
       console.error('Signup error:', err);
-      setError('Failed to connect to server. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to send verification code. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -209,41 +197,33 @@ export default function SignupPage() {
       return;
     }
 
-    // For demo, still check against generated OTP
-    // In production with Supabase, this would verify via backend
-    if (enteredOtp !== generatedOtp) {
-      setError('Invalid verification code. Please try again.');
-      setIsLoading(false);
-      return;
-    }
-
     try {
       if (!formData) return;
 
-      // Call backend to verify OTP (in production, Supabase handles this)
-      // For now, we simulate successful verification
-      const response = await fetch('http://localhost:5001/api/auth/login', {
+      // Verify OTP with backend
+      const response = await fetch('http://localhost:5001/api/auth/verify-otp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           email: formData.email,
-          password: formData.password,
+          token: enteredOtp,
+          name: formData.name,
         }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        setError(result.message || 'Verification failed. Please try again.');
+        setError(result.message || 'Invalid or expired verification code. Please try again.');
         setIsLoading(false);
         return;
       }
 
       // Login the user with backend token
-      const { user, access_token } = result.data;
-      login(user, access_token);
+      const { user, token } = result.data;
+      login(user, token);
       setStep('success');
 
       // Redirect after success animation
@@ -266,42 +246,25 @@ export default function SignupPage() {
     setOtp(['', '', '', '', '', '']);
 
     try {
-      await sendOTP(formData.email);
+      await sendOTP(formData.email, formData.name, formData.password, true);
     } catch (err) {
       console.error('Resend error:', err);
-      setError('Failed to resend code. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to resend code. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-20 px-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Floating particles */}
+    <div className="min-h-screen flex items-center justify-center py-20 px-4 bg-[#0a0a1f] relative overflow-hidden">
+      {/* Animated Grid Background - Same as Features page */}
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#1a1a3e_1px,transparent_1px),linear-gradient(to_bottom,#1a1a3e_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+
+      {/* Animated Background Blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(6)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="particle"
-            style={{
-              width: Math.random() * 100 + 50,
-              height: Math.random() * 100 + 50,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              y: [0, -30, 0],
-              x: [0, 15, 0],
-              opacity: [0.2, 0.4, 0.2],
-            }}
-            transition={{
-              duration: 8 + Math.random() * 4,
-              repeat: Infinity,
-              ease: 'easeInOut',
-              delay: Math.random() * 2,
-            }}
-          />
-        ))}
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-500" />
       </div>
 
       {/* Form Container */}
@@ -311,7 +274,7 @@ export default function SignupPage() {
         transition={{ duration: 0.6 }}
         className="relative z-10 w-full max-w-md"
       >
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+        <div className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-2xl p-8 border border-white/10">
           <AnimatePresence mode="wait">
             {/* Step 1: Registration Form */}
             {step === 'form' && (
@@ -331,10 +294,10 @@ export default function SignupPage() {
                   >
                     <LogoMark size="lg" animated={true} />
                   </motion.div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  <h1 className="text-3xl font-bold text-white mb-2">
                     Create Account
                   </h1>
-                  <p className="text-gray-600">Start your animation journey today</p>
+                  <p className="text-gray-400">Start your animation journey today</p>
                 </div>
 
                 {/* Error Message */}
@@ -342,7 +305,7 @@ export default function SignupPage() {
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6"
+                    className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-6"
                   >
                     {error}
                   </motion.div>
@@ -352,64 +315,64 @@ export default function SignupPage() {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                   {/* Name */}
                   <div className="space-y-2">
-                    <Label htmlFor="name" className="text-gray-700 font-medium">
+                    <Label htmlFor="name" className="text-gray-300 font-medium">
                       Full Name
                     </Label>
                     <div className="relative">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                       <Input
                         id="name"
                         type="text"
                         placeholder="John Doe"
-                        className="pl-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500 focus:ring-blue-500"
                         {...register('name')}
                       />
                     </div>
                     {errors.name && (
-                      <p className="text-red-600 text-sm">{errors.name.message}</p>
+                      <p className="text-red-400 text-sm">{errors.name.message}</p>
                     )}
-                    <p className="text-gray-400 text-xs">Letters and spaces only</p>
+                    <p className="text-gray-500 text-xs">Letters and spaces only</p>
                   </div>
 
                   {/* Email */}
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-gray-700 font-medium">
+                    <Label htmlFor="email" className="text-gray-300 font-medium">
                       Email
                     </Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                       <Input
                         id="email"
                         type="email"
                         placeholder="you@example.com"
-                        className="pl-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                        className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500 focus:ring-blue-500"
                         {...register('email')}
                       />
                     </div>
                     {errors.email && (
-                      <p className="text-red-600 text-sm">{errors.email.message}</p>
+                      <p className="text-red-400 text-sm">{errors.email.message}</p>
                     )}
-                    <p className="text-gray-400 text-xs">We&apos;ll send a verification code to this email</p>
+                    <p className="text-gray-500 text-xs">We&apos;ll send a verification code to this email</p>
                   </div>
 
                   {/* Password */}
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="text-gray-700 font-medium">
+                    <Label htmlFor="password" className="text-gray-300 font-medium">
                       Password
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                       <Input
                         id="password"
                         type={showPassword ? 'text' : 'password'}
                         placeholder="••••••••"
-                        className="pl-10 pr-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                        className="pl-10 pr-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500 focus:ring-blue-500"
                         {...register('password')}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400"
                       >
                         {showPassword ? (
                           <EyeOff className="h-5 w-5" />
@@ -419,7 +382,7 @@ export default function SignupPage() {
                       </button>
                     </div>
                     {errors.password && (
-                      <p className="text-red-600 text-sm">{errors.password.message}</p>
+                      <p className="text-red-400 text-sm">{errors.password.message}</p>
                     )}
                     {/* Password Strength Indicator */}
                     {password && (
@@ -429,7 +392,7 @@ export default function SignupPage() {
                             <div
                               key={level}
                               className={`h-1 flex-1 rounded-full transition-colors ${
-                                level <= passwordStrength ? getStrengthColor() : 'bg-gray-200'
+                                level <= passwordStrength ? getStrengthColor() : 'bg-white/10'
                               }`}
                             />
                           ))}
@@ -443,22 +406,22 @@ export default function SignupPage() {
 
                   {/* Confirm Password */}
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-gray-700 font-medium">
+                    <Label htmlFor="confirmPassword" className="text-gray-300 font-medium">
                       Confirm Password
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
                       <Input
                         id="confirmPassword"
                         type={showConfirmPassword ? 'text' : 'password'}
                         placeholder="••••••••"
-                        className="pl-10 pr-10 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                        className="pl-10 pr-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500 focus:ring-blue-500"
                         {...register('confirmPassword')}
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400"
                       >
                         {showConfirmPassword ? (
                           <EyeOff className="h-5 w-5" />
@@ -468,14 +431,14 @@ export default function SignupPage() {
                       </button>
                     </div>
                     {errors.confirmPassword && (
-                      <p className="text-red-600 text-sm">{errors.confirmPassword.message}</p>
+                      <p className="text-red-400 text-sm">{errors.confirmPassword.message}</p>
                     )}
                   </div>
 
                   {/* Submit Button */}
                   <Button
                     type="submit"
-                    className="w-full gradient-button text-white py-6 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 mt-6"
+                    className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white py-6 text-lg font-semibold rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 mt-6"
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -491,11 +454,11 @@ export default function SignupPage() {
 
                 {/* Login Link */}
                 <div className="mt-6 text-center">
-                  <p className="text-gray-600">
+                  <p className="text-gray-400">
                     Already have an account?{' '}
                     <Link
                       href="/login"
-                      className="text-blue-600 hover:text-blue-700 font-semibold"
+                      className="text-blue-400 hover:text-blue-300 font-semibold"
                     >
                       Sign in
                     </Link>
@@ -519,7 +482,7 @@ export default function SignupPage() {
                     setOtp(['', '', '', '', '', '']);
                     setError('');
                   }}
-                  className="flex items-center text-gray-600 hover:text-gray-900 mb-6"
+                  className="flex items-center text-gray-400 hover:text-white mb-6"
                 >
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   Back
@@ -527,15 +490,15 @@ export default function SignupPage() {
 
                 {/* Header */}
                 <div className="text-center mb-8">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-                    <KeyRound className="h-8 w-8 text-blue-600" />
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/20 mb-4">
+                    <KeyRound className="h-8 w-8 text-blue-400" />
                   </div>
-                  <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                  <h1 className="text-2xl font-bold text-white mb-2">
                     Verify your email
                   </h1>
-                  <p className="text-gray-600">
+                  <p className="text-gray-400">
                     We sent a 6-digit code to<br />
-                    <span className="font-medium text-gray-900">{formData?.email}</span>
+                    <span className="font-medium text-white">{formData?.email}</span>
                   </p>
                 </div>
 
@@ -544,7 +507,7 @@ export default function SignupPage() {
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6"
+                    className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-6"
                   >
                     {error}
                   </motion.div>
@@ -563,7 +526,7 @@ export default function SignupPage() {
                       onChange={(e) => handleOtpChange(index, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(index, e)}
                       onPaste={index === 0 ? handleOtpPaste : undefined}
-                      className="w-12 h-14 text-center text-2xl font-bold border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                      className="w-12 h-14 text-center text-2xl font-bold bg-white/5 border-white/10 text-white focus:border-blue-500 focus:ring-blue-500"
                     />
                   ))}
                 </div>
@@ -571,7 +534,7 @@ export default function SignupPage() {
                 {/* Verify Button */}
                 <Button
                   onClick={verifyOTP}
-                  className="w-full gradient-button text-white py-6 text-lg font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white py-6 text-lg font-semibold rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
                   disabled={isLoading || otp.join('').length !== 6}
                 >
                   {isLoading ? (
@@ -586,17 +549,17 @@ export default function SignupPage() {
 
                 {/* Resend Code */}
                 <div className="mt-6 text-center">
-                  <p className="text-gray-600">
+                  <p className="text-gray-400">
                     Didn&apos;t receive the code?{' '}
                     {resendTimer > 0 ? (
-                      <span className="text-gray-400">
+                      <span className="text-gray-500">
                         Resend in {resendTimer}s
                       </span>
                     ) : (
                       <button
                         onClick={resendOTP}
                         disabled={isLoading}
-                        className="text-blue-600 hover:text-blue-700 font-semibold"
+                        className="text-blue-400 hover:text-blue-300 font-semibold"
                       >
                         Resend code
                       </button>
@@ -618,14 +581,14 @@ export default function SignupPage() {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', stiffness: 200, damping: 10 }}
-                  className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-6"
+                  className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-500/20 mb-6"
                 >
-                  <CheckCircle2 className="h-10 w-10 text-green-600" />
+                  <CheckCircle2 className="h-10 w-10 text-green-400" />
                 </motion.div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                <h1 className="text-2xl font-bold text-white mb-2">
                   Account Created!
                 </h1>
-                <p className="text-gray-600 mb-4">
+                <p className="text-gray-400 mb-4">
                   Welcome to ANIAD, {formData?.name}!
                 </p>
                 <p className="text-gray-500 text-sm">
@@ -640,11 +603,11 @@ export default function SignupPage() {
         {step === 'form' && (
           <p className="text-center text-sm text-gray-500 mt-6">
             By signing up, you agree to our{' '}
-            <Link href="/terms" className="text-blue-600 hover:underline">
+            <Link href="/terms" className="text-blue-400 hover:underline">
               Terms
             </Link>{' '}
             and{' '}
-            <Link href="/privacy" className="text-blue-600 hover:underline">
+            <Link href="/privacy" className="text-blue-400 hover:underline">
               Privacy Policy
             </Link>
           </p>

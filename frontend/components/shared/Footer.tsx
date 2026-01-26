@@ -9,7 +9,6 @@ export default function Footer() {
     product: [
       { label: 'Features', href: '/features' },
       { label: 'How It Works', href: '/how-it-works' },
-      { label: 'Pricing', href: '#pricing' },
     ],
     company: [
       { label: 'About', href: '/about' },
@@ -29,15 +28,18 @@ export default function Footer() {
   ];
 
   return (
-    <footer className="bg-gray-50 border-t border-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <footer className="bg-[#0a0a1f] border-t border-white/10 relative overflow-hidden">
+      {/* Animated Grid Background */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a3e_1px,transparent_1px),linear-gradient(to_bottom,#1a1a3e_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30" />
+
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-8">
           {/* Brand */}
           <div className="lg:col-span-2">
             <div className="mb-4">
-              <Logo size="md" variant="full" animated={false} showTagline={true} theme="light" />
+              <Logo size="md" variant="full" animated={false} showTagline={true} theme="dark" />
             </div>
-            <p className="text-gray-600 mb-6 max-w-sm leading-relaxed">
+            <p className="text-gray-400 mb-6 max-w-sm leading-relaxed">
               Transform your ideas into stunning animations with AI-powered technology.
               Create, innovate, and animate effortlessly.
             </p>
@@ -50,7 +52,7 @@ export default function Footer() {
                     href={social.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:border-blue-200 transition-colors"
+                    className="w-10 h-10 rounded-lg bg-white/5 backdrop-blur-sm border border-white/10 flex items-center justify-center text-gray-400 hover:text-blue-400 hover:border-blue-500/30 transition-colors"
                     aria-label={social.label}
                   >
                     <Icon className="h-5 w-5" />
@@ -62,13 +64,13 @@ export default function Footer() {
 
           {/* Product Links */}
           <div>
-            <h3 className="text-gray-900 font-semibold mb-4">Product</h3>
+            <h3 className="text-white font-semibold mb-4">Product</h3>
             <ul className="space-y-3">
               {footerLinks.product.map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-gray-600 hover:text-gray-900 transition-colors"
+                    className="text-gray-400 hover:text-white transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -79,13 +81,13 @@ export default function Footer() {
 
           {/* Company Links */}
           <div>
-            <h3 className="text-gray-900 font-semibold mb-4">Company</h3>
+            <h3 className="text-white font-semibold mb-4">Company</h3>
             <ul className="space-y-3">
               {footerLinks.company.map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-gray-600 hover:text-gray-900 transition-colors"
+                    className="text-gray-400 hover:text-white transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -96,13 +98,13 @@ export default function Footer() {
 
           {/* Legal Links */}
           <div>
-            <h3 className="text-gray-900 font-semibold mb-4">Legal</h3>
+            <h3 className="text-white font-semibold mb-4">Legal</h3>
             <ul className="space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-gray-600 hover:text-gray-900 transition-colors"
+                    className="text-gray-400 hover:text-white transition-colors"
                   >
                     {link.label}
                   </Link>
@@ -113,12 +115,12 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="pt-8 border-t border-gray-200">
+        <div className="pt-8 border-t border-white/10">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-600 text-sm">
+            <p className="text-gray-400 text-sm">
               © {new Date().getFullYear()} ANIAD. All rights reserved.
             </p>
-            <p className="text-gray-600 text-sm mt-2 md:mt-0">
+            <p className="text-gray-400 text-sm mt-2 md:mt-0">
               Built with passion by the ANIAD Team
             </p>
           </div>

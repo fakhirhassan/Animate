@@ -40,6 +40,12 @@ export default function ConversionHistory({
   onDelete,
 }: ConversionHistoryProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+
+  const handleImageError = (itemId: string) => {
+    console.error(`Failed to load image for item: ${itemId}`);
+    setImageErrors(prev => new Set(prev).add(itemId));
+  };
 
   const formatDate = (date: Date) => {
     const now = new Date();
@@ -70,8 +76,8 @@ export default function ConversionHistory({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Recent Conversions</h3>
-        <span className="text-sm text-gray-500">{items.length} items</span>
+        <h3 className="text-lg font-semibold text-white">Recent Conversions</h3>
+        <span className="text-sm text-gray-400">{items.length} items</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -83,17 +89,25 @@ export default function ConversionHistory({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ delay: index * 0.05 }}
-              className="group relative bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-200"
+              className="group relative bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden hover:shadow-lg hover:border-white/30 transition-all duration-200"
               onMouseEnter={() => setHoveredId(item.id)}
               onMouseLeave={() => setHoveredId(null)}
             >
               {/* Thumbnail */}
-              <div className="aspect-square relative overflow-hidden bg-gray-100">
-                <img
-                  src={item.thumbnailUrl}
-                  alt={item.fileName}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                />
+              <div className="aspect-square relative overflow-hidden bg-gray-900">
+                {imageErrors.has(item.id) ? (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    <FileType className="h-12 w-12" />
+                  </div>
+                ) : (
+                  <img
+                    src={item.thumbnailUrl}
+                    alt={item.fileName}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    onError={() => handleImageError(item.id)}
+                    crossOrigin="anonymous"
+                  />
+                )}
 
                 {/* Hover Overlay */}
                 <AnimatePresence>
@@ -142,11 +156,11 @@ export default function ConversionHistory({
 
               {/* Info */}
               <div className="p-3 space-y-2">
-                <h4 className="font-medium text-gray-900 truncate text-sm">
+                <h4 className="font-medium text-white truncate text-sm">
                   {item.fileName}
                 </h4>
 
-                <div className="flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center justify-between text-xs text-gray-300">
                   <div className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
                     <span>{formatDate(item.createdAt)}</span>
@@ -161,9 +175,9 @@ export default function ConversionHistory({
                   <span
                     className={`
                       px-2 py-0.5 text-xs rounded-full capitalize
-                      ${item.quality === 'high' ? 'bg-green-100 text-green-700' : ''}
-                      ${item.quality === 'medium' ? 'bg-yellow-100 text-yellow-700' : ''}
-                      ${item.quality === 'low' ? 'bg-gray-100 text-gray-600' : ''}
+                      ${item.quality === 'high' ? 'bg-green-500/20 text-green-300' : ''}
+                      ${item.quality === 'medium' ? 'bg-yellow-500/20 text-yellow-300' : ''}
+                      ${item.quality === 'low' ? 'bg-gray-500/20 text-gray-300' : ''}
                     `}
                   >
                     {item.quality} quality

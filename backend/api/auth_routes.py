@@ -296,6 +296,105 @@ def refresh_token():
         return error_response('Failed to refresh token', 500)
 
 
+@bp.route('/send-otp', methods=['POST'])
+def send_otp():
+    """
+    Send OTP to user's email for verification.
+
+    Request Body:
+        - email: User email
+        - name: User's name (optional, for registration)
+        - password: User's password (for registration)
+        - is_resend: Boolean indicating if this is a resend request
+
+    Returns:
+        Success message indicating OTP was sent
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return error_response('No data provided', 400)
+
+        email = data.get('email')
+        name = data.get('name')
+        password = data.get('password')
+        is_resend = data.get('is_resend', False)
+
+        if not email:
+            return error_response('Email is required', 400)
+
+        # Get Supabase client
+        supabase = get_supabase()
+
+        # If this is a resend request or existing user, use magic OTP
+        if is_resend:
+            # Use Supabase's signInWithOtp to resend OTP
+            auth_response = supabase.auth.sign_in_with_otp({
+                "email": email,
+                "options": {
+                    "should_create_user": False  # Don't create new user on resend
+                }
+            })
+
+            return success_response({
+                'email': email,
+                'message': 'OTP resent successfully'
+            }, f'Verification code sent to {email}')
+
+        # If name and password are provided, this is a new signup request
+        if name and password:
+            # Use sign_in_with_otp for passwordless OTP flow
+            # This sends an OTP email that can be verified
+            auth_response = supabase.auth.sign_in_with_otp({
+                "email": email,
+                "options": {
+                    "data": {
+                        "name": name,
+                        "signup_password": password  # Store password to set later
+                    },
+                    "should_create_user": True  # Create user if doesn't exist
+                }
+            })
+
+            return success_response({
+                'email': email,
+                'message': 'OTP sent successfully'
+            }, f'Verification code sent to {email}')
+        else:
+            # For existing users without password (shouldn't happen in signup flow)
+            auth_response = supabase.auth.sign_in_with_otp({
+                "email": email
+            })
+
+            return success_response({
+                'email': email,
+                'message': 'OTP sent successfully'
+            }, f'Verification code sent to {email}')
+
+    except Exception as e:
+        logger.error(f'Send OTP error: {str(e)}')
+        error_msg = str(e).lower()
+        if 'already registered' in error_msg or 'already exists' in error_msg or 'user already exists' in error_msg:
+            # If user exists, send OTP anyway using magic link
+            try:
+                supabase = get_supabase()
+                auth_response = supabase.auth.sign_in_with_otp({
+                    "email": email,
+                    "options": {
+                        "should_create_user": False
+                    }
+                })
+                return success_response({
+                    'email': email,
+                    'message': 'OTP sent successfully'
+                }, f'Verification code sent to {email}')
+            except Exception as retry_error:
+                logger.error(f'Retry OTP send error: {str(retry_error)}')
+                return error_response('Failed to send OTP. Please try again.', 500)
+        return error_response('Failed to send OTP. Please try again.', 500)
+
+
 @bp.route('/verify-otp', methods=['POST'])
 def verify_otp():
     """
@@ -304,14 +403,16 @@ def verify_otp():
     Request Body:
         - email: User email
         - token: OTP token
+        - name: User's name (for new signups)
 
     Returns:
-        Success message
+        JWT token and user info on success
     """
     try:
         data = request.get_json()
         email = data.get('email')
         token = data.get('token')
+        name = data.get('name')
 
         if not all([email, token]):
             return error_response('Email and token are required', 400)
@@ -319,20 +420,161 @@ def verify_otp():
         # Get Supabase client
         supabase = get_supabase()
 
-        # Verify OTP
+        # Log the verification attempt
+        logger.info(f'Attempting OTP verification for email: {email}, token length: {len(token)}')
+
+        # Verify OTP - use 'email' type for sign_in_with_otp flow
         auth_response = supabase.auth.verify_otp({
             "email": email,
             "token": token,
-            "type": "signup"
+            "type": "email"
         })
 
-        if auth_response.session:
-            return success_response({
-                'token': auth_response.session.access_token
-            }, 'Email verified successfully')
+        if not auth_response.session:
+            return error_response('Invalid or expired OTP', 400)
 
-        return error_response('Invalid or expired OTP', 400)
+        user_data = auth_response.user
+        session = auth_response.session
+
+        # If there's a signup password in metadata, update the user's password
+        signup_password = user_data.user_metadata.get('signup_password')
+        if signup_password:
+            try:
+                # Update user password using admin API or update user
+                supabase.auth.update_user({
+                    "password": signup_password
+                })
+            except Exception as pwd_error:
+                logger.warning(f'Failed to set password after OTP verification: {str(pwd_error)}')
+
+        # Check if user profile exists in users table
+        user_profile = supabase.table('users').select('*').eq('id', user_data.id).execute()
+
+        if user_profile.data and len(user_profile.data) > 0:
+            # Existing user
+            profile = user_profile.data[0]
+        else:
+            # New user - create profile using upsert to avoid duplicate errors
+            profile = {
+                'id': str(user_data.id),
+                'email': email,
+                'name': name or user_data.user_metadata.get('name', email.split('@')[0]),
+                'role': 'creator'
+            }
+            result = supabase.table('users').upsert(profile, on_conflict='id').execute()
+            if result.data and len(result.data) > 0:
+                profile = result.data[0]
+
+        return success_response({
+            'user': {
+                'id': str(user_data.id),
+                'name': profile.get('name'),
+                'email': profile.get('email'),
+                'role': profile.get('role', 'creator')
+            },
+            'token': session.access_token,
+            'refresh_token': session.refresh_token
+        }, 'Email verified successfully')
 
     except Exception as e:
         logger.error(f'OTP verification error: {str(e)}')
         return error_response('OTP verification failed', 500)
+
+
+@bp.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    """
+    Send password reset email to user.
+
+    Request Body:
+        - email: User email
+
+    Returns:
+        Success message indicating reset email was sent
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return error_response('No data provided', 400)
+
+        email = data.get('email')
+
+        if not email:
+            return error_response('Email is required', 400)
+
+        # Get Supabase client
+        supabase = get_supabase()
+
+        # Send password reset email using Supabase Auth
+        # This will send an email with a reset link
+        supabase.auth.reset_password_for_email(email, {
+            'redirect_to': 'http://localhost:3000/reset-password'
+        })
+
+        return success_response({
+            'email': email,
+            'message': 'Password reset email sent'
+        }, f'Password reset instructions sent to {email}')
+
+    except Exception as e:
+        logger.error(f'Forgot password error: {str(e)}')
+        # Don't reveal if email exists or not for security
+        return success_response({
+            'email': email,
+            'message': 'If an account exists with this email, you will receive password reset instructions'
+        }, 'Password reset email sent')
+
+
+@bp.route('/reset-password', methods=['POST'])
+def reset_password():
+    """
+    Reset user password with token from email.
+
+    Request Body:
+        - token: Reset token from email
+        - password: New password
+
+    Returns:
+        Success message
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return error_response('No data provided', 400)
+
+        token = data.get('token')
+        new_password = data.get('password')
+
+        if not token or not new_password:
+            return error_response('Token and new password are required', 400)
+
+        if len(new_password) < 6:
+            return error_response('Password must be at least 6 characters', 400)
+
+        # Get Supabase client
+        supabase = get_supabase()
+
+        # Set the session with the access token first
+        # This authenticates the user with the reset token
+        session_response = supabase.auth.set_session(token, token)
+
+        if not session_response.user:
+            return error_response('Invalid or expired reset token', 400)
+
+        # Now update the user's password
+        auth_response = supabase.auth.update_user({
+            "password": new_password
+        })
+
+        if not auth_response.user:
+            return error_response('Failed to reset password', 400)
+
+        return success_response(None, 'Password reset successfully')
+
+    except Exception as e:
+        logger.error(f'Reset password error: {str(e)}')
+        if 'Invalid' in str(e) or 'expired' in str(e):
+            return error_response('Invalid or expired reset token', 400)
+        return error_response('Failed to reset password', 500)

@@ -1,6 +1,6 @@
 """
 2D to 3D Converter
-Main conversion pipeline that orchestrates depth estimation and mesh generation.
+Main conversion pipeline using TripoSR for true 3D model generation.
 """
 
 import os
@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional
 from PIL import Image
 import numpy as np
 
+from .triposr_converter import TripoSRConverter
 from .depth_estimator import DepthEstimator
 from .mesh_generator import MeshGenerator
 
@@ -20,12 +21,8 @@ class TwoDToThreeDConverter:
     """
     Main converter class that handles the full 2D to 3D conversion pipeline.
 
-    Pipeline:
-    1. Load and preprocess input image
-    2. Estimate depth map using neural network
-    3. Generate 3D point cloud from depth
-    4. Create mesh from point cloud
-    5. Export to desired format
+    Now using TripoSR for true 3D model generation instead of MiDaS depth estimation.
+    TripoSR generates proper 3D geometry with 360° viewability, not just 2.5D relief models.
     """
 
     def __init__(self, config: Optional[Dict] = None):
@@ -36,6 +33,10 @@ class TwoDToThreeDConverter:
             config: Configuration dictionary with model paths and settings
         """
         self.config = config or {}
+        self.triposr_converter = None
+        self.use_triposr = self.config.get('use_triposr', True)
+
+        # Fallback to old MiDaS pipeline if needed
         self.depth_estimator = None
         self.mesh_generator = None
         self._initialized = False
@@ -47,7 +48,7 @@ class TwoDToThreeDConverter:
             'models/two_d_to_three_d/model_weights'
         )
 
-        logger.info('TwoDToThreeDConverter created')
+        logger.info('TwoDToThreeDConverter created (using TripoSR)')
 
     def initialize(self) -> bool:
         """
@@ -59,17 +60,32 @@ class TwoDToThreeDConverter:
         try:
             logger.info('Initializing 2D to 3D converter...')
 
-            # Initialize depth estimator
-            self.depth_estimator = DepthEstimator(
-                model_path=self.model_weights_path
-            )
+            if self.use_triposr:
+                # Initialize TripoSR converter
+                self.triposr_converter = TripoSRConverter()
+                success = self.triposr_converter.initialize()
 
-            # Initialize mesh generator
-            self.mesh_generator = MeshGenerator()
+                if not success:
+                    logger.warning('TripoSR initialization failed, falling back to MiDaS')
+                    self.use_triposr = False
+                else:
+                    self._initialized = True
+                    logger.info('TripoSR converter initialized successfully')
+                    return True
 
-            self._initialized = True
-            logger.info('Converter initialized successfully')
-            return True
+            # Fallback to MiDaS pipeline
+            if not self.use_triposr:
+                # Initialize depth estimator
+                self.depth_estimator = DepthEstimator(
+                    model_path=self.model_weights_path
+                )
+
+                # Initialize mesh generator
+                self.mesh_generator = MeshGenerator()
+
+                self._initialized = True
+                logger.info('MiDaS converter initialized successfully (fallback)')
+                return True
 
         except Exception as e:
             logger.error(f'Failed to initialize converter: {str(e)}')
@@ -79,7 +95,7 @@ class TwoDToThreeDConverter:
         self,
         input_path: str,
         output_path: str,
-        output_format: str = 'glb',
+        output_format: str = 'obj',
         quality: str = 'medium'
     ) -> Dict[str, Any]:
         """
@@ -87,8 +103,8 @@ class TwoDToThreeDConverter:
 
         Args:
             input_path: Path to input image
-            output_path: Path for output 3D model
-            output_format: Output format (obj, glb, gltf)
+            output_path: Path for output 3D model (without extension)
+            output_format: Output format (obj, glb)
             quality: Conversion quality (low, medium, high)
 
         Returns:
@@ -114,7 +130,7 @@ class TwoDToThreeDConverter:
 
             logger.info(f'Starting conversion: {input_path}')
 
-            # Step 1: Load and preprocess image
+            # Step 1: Load image
             image = self._load_image(input_path, quality)
             if image is None:
                 return {
@@ -124,60 +140,94 @@ class TwoDToThreeDConverter:
 
             logger.info(f'Image loaded: {image.size}')
 
-            # Step 2: Estimate depth
-            depth_map = self.depth_estimator.estimate(image)
-            if depth_map is None:
+            # Use TripoSR pipeline
+            if self.use_triposr and self.triposr_converter:
+                logger.info('Using TripoSR pipeline for true 3D generation')
+
+                # Map quality to marching cubes resolution
+                resolution_map = {
+                    'low': 128,
+                    'medium': 256,
+                    'high': 512
+                }
+                mc_resolution = resolution_map.get(quality, 256)
+
+                # Convert using TripoSR
+                result = self.triposr_converter.convert(
+                    input_image=image,
+                    output_path=output_path,
+                    output_format=output_format,
+                    mc_resolution=mc_resolution,
+                    remove_bg=True
+                )
+
+                if result['success']:
+                    processing_time = time.time() - start_time
+                    result['processing_time'] = processing_time
+                    result['method'] = 'TripoSR'
+                    logger.info(f'TripoSR conversion completed in {processing_time:.2f}s')
+
+                return result
+
+            # Fallback to MiDaS pipeline (2.5D)
+            else:
+                logger.info('Using MiDaS fallback pipeline (2.5D)')
+
+                # Step 2: Estimate depth
+                depth_map = self.depth_estimator.estimate(image)
+                if depth_map is None:
+                    return {
+                        'success': False,
+                        'error': 'Depth estimation failed'
+                    }
+
+                logger.info('Depth map generated')
+
+                # Step 3: Generate mesh
+                mesh = self.mesh_generator.generate(
+                    image=image,
+                    depth_map=depth_map,
+                    quality=quality
+                )
+                if mesh is None:
+                    return {
+                        'success': False,
+                        'error': 'Mesh generation failed'
+                    }
+
+                logger.info('Mesh generated')
+
+                # Step 4: Export mesh
+                final_output_path = f'{output_path}.{output_format}'
+                export_success = self.mesh_generator.export(
+                    mesh=mesh,
+                    output_path=final_output_path,
+                    format=output_format
+                )
+
+                if not export_success:
+                    return {
+                        'success': False,
+                        'error': 'Failed to export mesh'
+                    }
+
+                processing_time = time.time() - start_time
+
+                logger.info(f'MiDaS conversion completed in {processing_time:.2f}s')
+
                 return {
-                    'success': False,
-                    'error': 'Depth estimation failed'
+                    'success': True,
+                    'output_path': final_output_path,
+                    'format': output_format,
+                    'processing_time': processing_time,
+                    'method': 'MiDaS',
+                    'metadata': {
+                        'input_resolution': image.size,
+                        'quality': quality,
+                        'vertex_count': mesh.get('vertex_count', 0),
+                        'face_count': mesh.get('face_count', 0)
+                    }
                 }
-
-            logger.info('Depth map generated')
-
-            # Step 3: Generate mesh
-            mesh = self.mesh_generator.generate(
-                image=image,
-                depth_map=depth_map,
-                quality=quality
-            )
-            if mesh is None:
-                return {
-                    'success': False,
-                    'error': 'Mesh generation failed'
-                }
-
-            logger.info('Mesh generated')
-
-            # Step 4: Export mesh
-            final_output_path = f'{output_path}.{output_format}'
-            export_success = self.mesh_generator.export(
-                mesh=mesh,
-                output_path=final_output_path,
-                format=output_format
-            )
-
-            if not export_success:
-                return {
-                    'success': False,
-                    'error': 'Failed to export mesh'
-                }
-
-            processing_time = time.time() - start_time
-
-            logger.info(f'Conversion completed in {processing_time:.2f}s')
-
-            return {
-                'success': True,
-                'output_path': final_output_path,
-                'format': output_format,
-                'processing_time': processing_time,
-                'metadata': {
-                    'input_resolution': image.size,
-                    'quality': quality,
-                    'vertex_count': mesh.get('vertex_count', 0),
-                    'face_count': mesh.get('face_count', 0)
-                }
-            }
 
         except Exception as e:
             logger.error(f'Conversion error: {str(e)}')
@@ -236,6 +286,8 @@ class TwoDToThreeDConverter:
 
     def cleanup(self):
         """Clean up resources."""
+        if self.triposr_converter:
+            self.triposr_converter.cleanup()
         if self.depth_estimator:
             self.depth_estimator.cleanup()
         if self.mesh_generator:

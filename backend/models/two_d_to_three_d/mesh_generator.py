@@ -115,11 +115,11 @@ class MeshGenerator:
         depth_scale: float
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Convert depth map to 3D point cloud.
+        Convert depth map to 3D point cloud with improved quality.
 
         Args:
             image: Source image for colors
-            depth_map: Depth values
+            depth_map: Depth values (0-1 range)
             depth_scale: Scale factor for depth
 
         Returns:
@@ -129,17 +129,27 @@ class MeshGenerator:
 
         # Create meshgrid for x, y coordinates
         x = np.linspace(-1, 1, width)
-        y = np.linspace(-1, 1, height)
+        y = np.linspace(1, -1, height)  # Flip Y for correct orientation
         xx, yy = np.meshgrid(x, y)
 
-        # Scale depth
-        zz = depth_map * depth_scale
+        # Improve depth scaling with more dramatic effect
+        # Invert depth (closer = more forward)
+        zz = (1.0 - depth_map) * depth_scale * 2.0  # Double the depth effect
+
+        # Add slight curve to make it more 3D-like
+        center_x, center_y = width / 2, height / 2
+        dist_from_center = np.sqrt(
+            ((np.arange(width) - center_x) / width) ** 2 +
+            ((np.arange(height)[:, np.newaxis] - center_y) / height) ** 2
+        )
+        # Edges pull back slightly
+        zz = zz - (dist_from_center * 0.1)
 
         # Flatten to point cloud
         points = np.stack([xx.flatten(), yy.flatten(), zz.flatten()], axis=1)
 
-        # Get colors from image
-        img_array = np.array(image.resize((width, height))) / 255.0
+        # Get colors from image (ensure same size)
+        img_array = np.array(image.resize((width, height), Image.Resampling.LANCZOS)) / 255.0
         colors = img_array.reshape(-1, 3)
 
         return points.astype(np.float32), colors.astype(np.float32)
@@ -163,21 +173,44 @@ class MeshGenerator:
             )
             pcd.orient_normals_consistent_tangent_plane(100)
 
-            # Create mesh using Poisson reconstruction
-            mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-                pcd, depth=9
-            )
+            # Try Ball Pivoting Algorithm first (more reliable for depth maps)
+            logger.info('Attempting Ball Pivoting Algorithm mesh reconstruction')
+            try:
+                # Compute average distance between points
+                distances = pcd.compute_nearest_neighbor_distance()
+                avg_dist = np.mean(distances)
+                radii = [avg_dist * r for r in [1.5, 2.0, 2.5]]
 
-            # Remove low density vertices
-            vertices_to_remove = densities < np.quantile(densities, 0.01)
-            mesh.remove_vertices_by_mask(vertices_to_remove)
+                mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+                    pcd,
+                    o3d.utility.DoubleVector(radii)
+                )
+
+                if len(mesh.triangles) > 0:
+                    logger.info(f'Ball Pivoting successful: {len(mesh.triangles)} triangles')
+                else:
+                    raise Exception('Ball Pivoting produced empty mesh')
+
+            except Exception as bpa_error:
+                logger.warning(f'Ball Pivoting failed: {str(bpa_error)}, trying Poisson')
+
+                # Fallback to Poisson reconstruction with lower depth for stability
+                mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+                    pcd, depth=7  # Lower depth for more stability
+                )
+
+                # Remove low density vertices
+                vertices_to_remove = densities < np.quantile(densities, 0.05)
+                mesh.remove_vertices_by_mask(vertices_to_remove)
 
             # Simplify mesh based on quality
-            target_triangles = int(len(mesh.triangles) * settings['simplify'])
-            mesh = mesh.simplify_quadric_decimation(target_triangles)
+            if len(mesh.triangles) > 1000:
+                target_triangles = int(len(mesh.triangles) * settings['simplify'])
+                if target_triangles > 100:  # Ensure minimum triangles
+                    mesh = mesh.simplify_quadric_decimation(target_triangles)
 
             # Smooth mesh
-            mesh = mesh.filter_smooth_simple(number_of_iterations=2)
+            mesh = mesh.filter_smooth_simple(number_of_iterations=1)
 
             return {
                 'mesh_object': mesh,

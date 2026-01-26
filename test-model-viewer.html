@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Model Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a2e; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-radius: 8px;
+            font-family: Arial;
+            max-width: 400px;
+        }
+        #loading { color: #4ade80; }
+        #error { color: #f87171; }
+        #success { color: #4ade80; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>3D Model Viewer Test</h3>
+        <div id="status">
+            <p id="loading">Loading model...</p>
+            <p id="error" style="display:none;"></p>
+            <p id="success" style="display:none;">Model loaded successfully!</p>
+        </div>
+        <div id="details" style="display:none; margin-top: 10px;">
+            <p><strong>Vertices:</strong> <span id="vertices">-</span></p>
+            <p><strong>Faces:</strong> <span id="faces">-</span></p>
+        </div>
+    </div>
+    <script>
+        // Setup scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lights - Enhanced lighting setup
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight1.position.set(5, 5, 5);
+        scene.add(directionalLight1);
+
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+        directionalLight2.position.set(-5, -5, -5);
+        scene.add(directionalLight2);
+
+        // Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 2;
+
+        // Load model
+        const modelUrl = 'http://localhost:5001/api/convert/download/fd184698-e170-4c8c-a897-2adb90ebccc5';
+        console.log('Loading model from:', modelUrl);
+
+        const loader = new THREE.OBJLoader();
+        loader.load(
+            modelUrl,
+            function(object) {
+                console.log('Model loaded successfully!', object);
+
+                // Center and scale model
+                const box = new THREE.Box3().setFromObject(object);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const scale = 2 / maxDim;
+
+                object.position.sub(center);
+                object.scale.set(scale, scale, scale);
+
+                // Add materials
+                object.traverse(function(child) {
+                    if (child instanceof THREE.Mesh) {
+                        child.material = new THREE.MeshStandardMaterial({
+                            color: 0x808080,
+                            roughness: 0.5,
+                            metalness: 0.1
+                        });
+                    }
+                });
+
+                scene.add(object);
+
+                // Update UI
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('success').style.display = 'block';
+                document.getElementById('details').style.display = 'block';
+
+                let vertices = 0, faces = 0;
+                object.traverse(function(child) {
+                    if (child instanceof THREE.Mesh) {
+                        vertices += child.geometry.attributes.position.count;
+                        faces += child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3;
+                    }
+                });
+
+                document.getElementById('vertices').textContent = vertices.toLocaleString();
+                document.getElementById('faces').textContent = Math.floor(faces).toLocaleString();
+            },
+            function(xhr) {
+                const percent = Math.round((xhr.loaded / xhr.total) * 100);
+                console.log('Loading progress:', percent + '%');
+                document.getElementById('loading').textContent = `Loading model... ${percent}%`;
+            },
+            function(error) {
+                console.error('Error loading model:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Error: ' + error.message;
+            }
+        );
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
