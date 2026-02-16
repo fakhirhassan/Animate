@@ -14,6 +14,7 @@ import {
   X,
   ChevronRight,
   Sparkles,
+  Film,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
@@ -30,6 +31,12 @@ const navItems = [
     href: '/creator/2d-to-3d',
     icon: Box,
     description: 'Convert images to 3D models',
+  },
+  {
+    name: 'Animate',
+    href: '/creator/animate',
+    icon: Film,
+    description: 'Text to 3D animation',
   },
   {
     name: 'Assets',

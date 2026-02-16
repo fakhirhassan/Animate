@@ -121,16 +121,33 @@ export const conversionAPI = {
   getSupportedFormats: () => api.get('/convert/supported-formats'),
 };
 
-// Animation API
+// Script / Scene Parser API
+export const scriptAPI = {
+  analyzeScene: (script: string) =>
+    api.post('/script/analyze', { script }),
+
+  checkParser: () => api.get('/script/check'),
+};
+
+// Animation / Video Generation API
 export const animationAPI = {
-  generate: (data: { script: string; style: string }) =>
-    api.post('/animation/generate', data),
+  generate: (data: {
+    prompt: string;
+    num_frames?: number;
+    num_inference_steps?: number;
+    fps?: number;
+    height?: number;
+    width?: number;
+    seed?: number;
+  }) => api.post('/animation/generate', data, { timeout: 600000 }),
+
+  checkGenerator: () => api.get('/animation/check'),
+
+  unloadModel: () => api.post('/animation/unload'),
 
   getStatus: (jobId: string) => api.get(`/animation/status/${jobId}`),
 
-  download: (jobId: string) => api.get(`/animation/download/${jobId}`, {
-    responseType: 'blob',
-  }),
+  getStyles: () => api.get('/animation/styles'),
 };
 
 export default api;

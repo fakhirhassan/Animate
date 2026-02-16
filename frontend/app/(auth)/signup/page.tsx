@@ -292,7 +292,7 @@ export default function SignupPage() {
                     transition={{ duration: 0.5, delay: 0.2 }}
                     className="mb-4"
                   >
-                    <LogoMark size="lg" animated={true} />
+                    <LogoMark size={48} animated={true} />
                   </motion.div>
                   <h1 className="text-3xl font-bold text-white mb-2">
                     Create Account

@@ -4,6 +4,11 @@ Main application entry point for AI-powered animation generation.
 """
 
 import os
+
+# Fix OpenMP conflict between open3d and onnxruntime (must be set before any imports)
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+os.environ['OMP_NUM_THREADS'] = '1'
+
 import logging
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
@@ -202,7 +207,7 @@ app = create_app()
 
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5000))
+    port = int(os.getenv('PORT', 5001))
     debug = os.getenv('FLASK_ENV', 'development') == 'development'
 
     app.run(

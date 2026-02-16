@@ -1,6 +1,6 @@
 """
-Animation Generation API Routes (Future Implementation)
-Handles full animation generation, rendering, and export.
+Animation Generation API Routes
+Handles text-to-video generation using HunyuanVideo 1.5.
 """
 
 import logging
@@ -16,17 +16,19 @@ logger = logging.getLogger(__name__)
 @bp.route('/generate', methods=['POST'])
 def generate_animation():
     """
-    Generate a complete animation from script and assets.
+    Generate a video from a text prompt using HunyuanVideo 1.5.
 
     Request Body:
-        - script: Animation script or scene description
-        - style: Animation style preset
-        - duration: Target duration in seconds
-        - resolution: Output resolution (720p, 1080p, 4k)
-        - fps: Frames per second (24, 30, 60)
+        - prompt: Text description of the video to generate
+        - num_frames: Number of frames (default 61, ~4s at 15fps)
+        - num_inference_steps: Quality steps (default 30)
+        - fps: Frames per second (default 15)
+        - height: Video height (default 480)
+        - width: Video width (default 848)
+        - seed: Random seed (optional)
 
     Returns:
-        Animation job ID and status
+        Video URL and metadata
     """
     try:
         data = request.get_json()
@@ -34,180 +36,91 @@ def generate_animation():
         if not data:
             return error_response('Request data is required', 400)
 
-        script = data.get('script')
-        style = data.get('style', 'default')
-        duration = data.get('duration', 30)
-        resolution = data.get('resolution', '1080p')
-        fps = data.get('fps', 30)
+        prompt = data.get('prompt') or data.get('script')
+        if not prompt:
+            return error_response('Prompt is required', 400)
 
-        if not script:
-            return error_response('Script is required', 400)
+        num_frames = data.get('num_frames', 61)
+        num_inference_steps = data.get('num_inference_steps', 30)
+        fps = data.get('fps', 15)
+        height = data.get('height', 480)
+        width = data.get('width', 848)
+        seed = data.get('seed')
 
-        # TODO: Implement full animation generation pipeline
-        return success_response({
-            'job_id': 'anim-placeholder',
-            'status': 'queued',
-            'estimated_time': duration * 2,  # Rough estimate
-            'settings': {
-                'style': style,
-                'duration': duration,
-                'resolution': resolution,
-                'fps': fps
-            },
-            'message': 'Full animation generation coming soon'
-        }, 'Animation generation not yet implemented')
+        from services.video_generation_service import generate_video
+        result = generate_video(
+            prompt=prompt,
+            num_frames=num_frames,
+            num_inference_steps=num_inference_steps,
+            fps=fps,
+            height=height,
+            width=width,
+            seed=seed,
+        )
 
+        return success_response(result, 'Video generated successfully')
+
+    except RuntimeError as e:
+        logger.error(f'Video generation runtime error: {str(e)}')
+        return error_response(str(e), 503)
     except Exception as e:
-        logger.error(f'Animation generation error: {str(e)}')
-        return error_response('Animation generation failed', 500)
+        logger.error(f'Video generation error: {str(e)}')
+        return error_response(f'Video generation failed: {str(e)}', 500)
+
+
+@bp.route('/check', methods=['GET'])
+def check_generator():
+    """
+    Check if the video generator (HunyuanVideo 1.5) is available.
+
+    Returns:
+        Availability status and model info
+    """
+    try:
+        from services.video_generation_service import check_availability
+        status = check_availability()
+        return success_response(status, 'Generator status retrieved')
+    except Exception as e:
+        logger.error(f'Generator check error: {str(e)}')
+        return error_response('Failed to check generator status', 500)
+
+
+@bp.route('/unload', methods=['POST'])
+def unload_model():
+    """
+    Unload the video model to free GPU memory.
+
+    Returns:
+        Success message
+    """
+    try:
+        from services.video_generation_service import unload_model as do_unload
+        do_unload()
+        return success_response({'message': 'Model unloaded'}, 'Model unloaded successfully')
+    except Exception as e:
+        logger.error(f'Unload error: {str(e)}')
+        return error_response('Failed to unload model', 500)
 
 
 @bp.route('/styles', methods=['GET'])
 def list_animation_styles():
-    """
-    List available animation styles.
-
-    Returns:
-        List of animation style presets
-    """
+    """List available animation styles."""
     return success_response({
         'styles': [
-            {
-                'id': 'default',
-                'name': 'Default',
-                'description': 'Clean, modern animation style',
-                'preview_url': None
-            },
-            {
-                'id': 'cartoon',
-                'name': 'Cartoon',
-                'description': '2D cartoon-like animation',
-                'preview_url': None
-            },
-            {
-                'id': 'realistic',
-                'name': 'Realistic',
-                'description': 'Photorealistic 3D animation',
-                'preview_url': None
-            },
-            {
-                'id': 'anime',
-                'name': 'Anime',
-                'description': 'Japanese anime style',
-                'preview_url': None
-            },
-            {
-                'id': 'minimalist',
-                'name': 'Minimalist',
-                'description': 'Simple, clean geometric style',
-                'preview_url': None
-            }
+            {'id': 'default', 'name': 'Default', 'description': 'Clean, modern style'},
+            {'id': 'cartoon', 'name': 'Cartoon', 'description': '2D cartoon-like animation'},
+            {'id': 'realistic', 'name': 'Realistic', 'description': 'Photorealistic animation'},
+            {'id': 'anime', 'name': 'Anime', 'description': 'Japanese anime style'},
         ]
     })
-
-
-@bp.route('/templates', methods=['GET'])
-def list_templates():
-    """
-    List available animation templates.
-
-    Returns:
-        List of pre-made animation templates
-    """
-    return success_response({
-        'templates': [
-            {
-                'id': 'explainer',
-                'name': 'Explainer Video',
-                'description': 'Perfect for product explanations',
-                'duration': 60,
-                'preview_url': None
-            },
-            {
-                'id': 'story',
-                'name': 'Story Animation',
-                'description': 'Narrative-driven animation',
-                'duration': 120,
-                'preview_url': None
-            },
-            {
-                'id': 'social',
-                'name': 'Social Media',
-                'description': 'Short-form social content',
-                'duration': 15,
-                'preview_url': None
-            }
-        ]
-    })
-
-
-@bp.route('/render/<job_id>', methods=['POST'])
-def render_animation(job_id):
-    """
-    Start rendering a completed animation.
-
-    Args:
-        job_id: Animation job ID
-
-    Request Body:
-        - format: Output format (mp4, webm, gif)
-        - quality: Render quality (draft, standard, high)
-
-    Returns:
-        Render job status
-    """
-    try:
-        data = request.get_json() or {}
-        output_format = data.get('format', 'mp4')
-        quality = data.get('quality', 'standard')
-
-        # TODO: Implement rendering pipeline
-        return success_response({
-            'render_job_id': f'render-{job_id}',
-            'status': 'queued',
-            'format': output_format,
-            'quality': quality,
-            'message': 'Rendering pipeline coming soon'
-        }, 'Rendering not yet implemented')
-
-    except Exception as e:
-        logger.error(f'Render error: {str(e)}')
-        return error_response('Rendering failed', 500)
 
 
 @bp.route('/status/<job_id>', methods=['GET'])
 def get_animation_status(job_id):
-    """
-    Get the status of an animation job.
-
-    Args:
-        job_id: Animation job ID
-
-    Returns:
-        Job status and progress
-    """
-    # TODO: Implement job status tracking
+    """Get the status of an animation job."""
     return success_response({
         'job_id': job_id,
         'status': 'not_found',
         'progress': 0,
         'message': 'Job tracking coming soon'
     })
-
-
-@bp.route('/export/<job_id>', methods=['GET'])
-def export_animation(job_id):
-    """
-    Export a completed animation.
-
-    Args:
-        job_id: Animation job ID
-
-    Query Parameters:
-        - format: Export format
-
-    Returns:
-        Animation file download
-    """
-    # TODO: Implement export functionality
-    return error_response('Export functionality coming soon', 501)

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
@@ -25,6 +25,14 @@ const resetPasswordSchema = z.object({
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a1f]" />}>
+      <ResetPasswordContent />
+    </Suspense>
+  );
+}
+
+function ResetPasswordContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -114,7 +122,7 @@ export default function ResetPasswordPage() {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="mb-4"
             >
-              <LogoMark size="lg" animated={true} />
+              <LogoMark size={48} animated={true} />
             </motion.div>
             <h1 className="text-3xl font-bold text-white mb-2">
               Reset Password
