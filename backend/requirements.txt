@@ -13,6 +13,9 @@ numpy==1.26.2
 scipy==1.11.4
 
 # Deep learning (PyTorch)
+# NOTE: Install CUDA version manually FIRST:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+# Then install the rest of this file. Do NOT let pip install the CPU torch from here.
 torch>=2.2.0
 torchvision>=0.17.0
 
@@ -25,20 +28,24 @@ pyglet<2
 timm==0.9.12
 transformers>=4.36.0
 
-# Video generation (Wan2.1)
+# Video generation (Wan2.1 / Wan2.2)
 diffusers>=0.33.0
 accelerate>=1.0.0
 safetensors>=0.4.0
+huggingface_hub>=0.23.0
 
 # TTS (Kokoro-82M)
+# NOTE: Do NOT install mlx-audio — it is Apple Silicon only and will fail on Windows/CUDA.
+# kokoro works on Windows/CUDA without mlx.
 kokoro>=0.9
 soundfile>=0.12.0
 
-# Scene parsing (Ollama LLM)
+# Scene parsing (Ollama LLM — install Ollama separately from https://ollama.com/download)
 ollama>=0.4.0
 
-# Video stitching
-# ffmpeg-python (system ffmpeg required)
+# Video stitching (FFmpeg must be installed separately)
+# Windows: winget install Gyan.FFmpeg
+# Then restart terminal so ffmpeg is in PATH
 
 # Database
 psycopg2-binary==2.9.9

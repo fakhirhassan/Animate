@@ -119,11 +119,11 @@ class WanVideoGenerator:
     def generate_from_text(
         self,
         prompt: str,
-        num_frames: int = 33,
-        num_inference_steps: int = 20,
+        num_frames: int = 81,
+        num_inference_steps: int = 30,
         fps: int = 16,
-        height: int = 256,
-        width: int = 448,
+        height: int = 480,
+        width: int = 832,
         guidance_scale: float = 5.0,
         seed: Optional[int] = None,
     ) -> Dict[str, Any]:

@@ -38,7 +38,7 @@ export default function AnimatePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [voicePresets, setVoicePresets] = useState<VoicePreset[]>([]);
   const [settings, setSettings] = useState({
-    num_frames_per_segment: 33,
+    num_frames_per_segment: 81,
     num_inference_steps: 30,
     fps: 16,
     voice_preset: 'af_heart',
@@ -325,7 +325,7 @@ export default function AnimatePage() {
                 Building your scene with AI video + voice generation...
               </p>
               <p className="text-xs text-gray-500 mb-6">
-                This takes 15-30+ minutes on Mac M4 Pro. Please be patient.
+                This takes 5-15 minutes on RTX A4000. Please be patient.
               </p>
 
               {/* Pipeline steps indicator */}
