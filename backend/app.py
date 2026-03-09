@@ -1,5 +1,5 @@
 """
-AniMate Flask Backend
+Mesh Flask Backend
 Main application entry point for AI-powered animation generation.
 """
 
@@ -73,7 +73,7 @@ def create_app(config_name=None):
     def health_check():
         return jsonify({
             'status': 'healthy',
-            'service': 'AniMate Backend',
+            'service': 'Mesh Backend',
             'version': '1.0.0'
         }), 200
 
@@ -81,7 +81,7 @@ def create_app(config_name=None):
     @app.route('/', methods=['GET'])
     def root():
         return jsonify({
-            'message': 'Welcome to AniMate AI Backend',
+            'message': 'Welcome to Mesh AI Backend',
             'version': '1.0.0',
             'endpoints': {
                 'health': '/health',
@@ -98,7 +98,7 @@ def create_app(config_name=None):
         upload_folder = app.config['UPLOAD_FOLDER']
         return send_from_directory(upload_folder, filename)
 
-    app.logger.info(f'AniMate backend started in {config_name} mode')
+    app.logger.info(f'Mesh backend started in {config_name} mode')
 
     return app
 
@@ -112,7 +112,7 @@ def setup_logging(app):
         os.makedirs('logs')
 
     # File handler for logging
-    file_handler = logging.FileHandler('logs/animate.log')
+    file_handler = logging.FileHandler('logs/mesh.log')
     file_handler.setLevel(log_level)
     file_handler.setFormatter(logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

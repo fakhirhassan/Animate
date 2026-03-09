@@ -1,24 +1,24 @@
 """
 Video Generation Service
-Wraps the HunyuanVideo generator for use by API routes.
+Wraps the Wan2.1 generator for use by API routes.
+Currently supports T2V only. I2V will be added when Wan2.2-TI2V-5B is downloaded.
 """
 
 import logging
 from typing import Dict, Any, Optional
 
-from models.video_generator.hunyuan_video import HunyuanVideoGenerator
+from models.video_generator.wan_video import WanVideoGenerator
 
 logger = logging.getLogger(__name__)
 
-# Singleton instance
-_generator: Optional[HunyuanVideoGenerator] = None
+_generator: Optional[WanVideoGenerator] = None
 
 
-def get_generator() -> HunyuanVideoGenerator:
+def get_generator() -> WanVideoGenerator:
     """Get or create the video generator singleton."""
     global _generator
     if _generator is None:
-        _generator = HunyuanVideoGenerator()
+        _generator = WanVideoGenerator()
     return _generator
 
 
@@ -28,37 +28,23 @@ def check_availability() -> Dict[str, Any]:
     available = generator.is_available()
     return {
         "available": available,
-        "model": "HunyuanVideo 1.5 (480p)",
+        "model": "Wan2.1-T2V-1.3B",
         "message": "Ready" if available else "No GPU available (requires CUDA or MPS)",
     }
 
 
-def generate_video(
+def generate_video_from_text(
     prompt: str,
-    num_frames: int = 61,
+    num_frames: int = 33,
     num_inference_steps: int = 30,
-    fps: int = 15,
+    fps: int = 16,
     height: int = 480,
-    width: int = 848,
+    width: int = 832,
     seed: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """
-    Generate a video from a text prompt.
-
-    Args:
-        prompt: Text description of the video
-        num_frames: Number of frames to generate
-        num_inference_steps: Quality steps (more = better but slower)
-        fps: Output frames per second
-        height: Video height
-        width: Video width
-        seed: Random seed for reproducibility
-
-    Returns:
-        Dict with video URL and metadata
-    """
+    """Generate a video from a text prompt using Wan2.1."""
     generator = get_generator()
-    result = generator.generate(
+    result = generator.generate_from_text(
         prompt=prompt,
         num_frames=num_frames,
         num_inference_steps=num_inference_steps,
@@ -67,7 +53,7 @@ def generate_video(
         width=width,
         seed=seed,
     )
-    logger.info(f"Video generated: {result['video_url']} ({result['duration']}s)")
+    logger.info(f"T2V generated: {result['video_url']} ({result['duration']}s)")
     return result
 
 

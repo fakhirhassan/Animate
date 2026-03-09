@@ -47,8 +47,14 @@ class Config:
     AWS_S3_REGION = os.getenv('AWS_S3_REGION', 'us-east-1')
 
     # Processing settings
-    MAX_PROCESSING_TIME = 300  # 5 minutes max processing time
+    MAX_PROCESSING_TIME = 600  # 10 minutes max processing time (video gen is slow)
     ENABLE_GPU = os.getenv('ENABLE_GPU', 'true').lower() == 'true'
+
+    # Animation pipeline settings
+    VIDEO_MODEL = os.getenv('VIDEO_MODEL', '1.3b')  # '1.3b' or '5b' or '14b'
+    DEFAULT_VOICE = os.getenv('DEFAULT_VOICE', 'af_heart')
+    DEFAULT_NUM_CLIPS = int(os.getenv('DEFAULT_NUM_CLIPS', '4'))
+    DEFAULT_FRAMES_PER_CLIP = int(os.getenv('DEFAULT_FRAMES_PER_CLIP', '33'))
 
 
 class DevelopmentConfig(Config):

@@ -131,7 +131,18 @@ export const scriptAPI = {
 
 // Animation / Video Generation API
 export const animationAPI = {
+  // Full pipeline: text → scene parse → multi-clip video + voice → stitched MP4
   generate: (data: {
+    text: string;
+    num_frames_per_segment?: number;
+    num_inference_steps?: number;
+    fps?: number;
+    voice_preset?: string;
+    num_clips?: number;
+  }) => api.post('/animation/generate', data, { timeout: 1800000 }), // 30 min timeout
+
+  // Single clip text-to-video
+  textToVideo: (data: {
     prompt: string;
     num_frames?: number;
     num_inference_steps?: number;
@@ -139,15 +150,26 @@ export const animationAPI = {
     height?: number;
     width?: number;
     seed?: number;
-  }) => api.post('/animation/generate', data, { timeout: 600000 }),
+  }) => api.post('/animation/text-to-video', data, { timeout: 600000 }),
+
+  // Image animation with optional voice
+  imageAnimate: (formData: FormData) =>
+    api.post('/animation/image-animate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000,
+    }),
 
   checkGenerator: () => api.get('/animation/check'),
 
   unloadModel: () => api.post('/animation/unload'),
+};
 
-  getStatus: (jobId: string) => api.get(`/animation/status/${jobId}`),
+// Voice / TTS API
+export const voiceAPI = {
+  generate: (data: { text: string; voice_preset?: string }) =>
+    api.post('/voice/generate', data, { timeout: 60000 }),
 
-  getStyles: () => api.get('/animation/styles'),
+  getPresets: () => api.get('/voice/presets'),
 };
 
 export default api;

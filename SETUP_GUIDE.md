@@ -503,3 +503,4 @@ cp .env.local.example .env.local   # Edit if needed
 
 # 6. Open http://localhost:3000
 ```
+okay im in AI computer

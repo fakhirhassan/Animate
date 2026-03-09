@@ -1,8 +1,8 @@
 """
 Video Generator Module
-Text-to-video generation using HunyuanVideo 1.5.
+Text-to-video and image-to-video generation using Wan2.1.
 """
 
-from models.video_generator.hunyuan_video import HunyuanVideoGenerator
+from models.video_generator.wan_video import WanVideoGenerator
 
-__all__ = ['HunyuanVideoGenerator']
+__all__ = ['WanVideoGenerator']

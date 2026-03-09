@@ -8,6 +8,11 @@ venv/
 env/
 .venv/
 
+# Model weights (large files)
+/models/
+*.safetensors
+*.pth
+
 # Build outputs
 .next/
 out/
