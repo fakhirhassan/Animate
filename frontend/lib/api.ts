@@ -30,8 +30,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+      // Only redirect if not already on auth pages
+      const isAuthPage = window.location.pathname.startsWith('/login') || window.location.pathname.startsWith('/signup');
+      if (!isAuthPage) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('auth-storage');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -54,6 +59,12 @@ export const authAPI = {
 
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),
+
+  sendOtp: (data: { email: string; name?: string; password?: string; is_resend?: boolean }) =>
+    api.post('/auth/send-otp', data),
+
+  verifyOtp: (data: { email: string; token: string; name?: string }) =>
+    api.post('/auth/verify-otp', data),
 };
 
 // Projects API

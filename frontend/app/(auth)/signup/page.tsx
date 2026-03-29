@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
+import { authAPI } from '@/lib/api';
 import { LogoMark } from '@/components/shared/Logo';
 
 // Enhanced validation schema
@@ -92,22 +93,16 @@ export default function SignupPage() {
   // Send OTP via email using backend API
   const sendOTP = async (email: string, name: string, password: string, isResend: boolean = false) => {
     try {
-      const response = await fetch('http://localhost:5001/api/auth/send-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          name,
-          password,
-          is_resend: isResend,
-        }),
+      const response = await authAPI.sendOtp({
+        email,
+        name,
+        password,
+        is_resend: isResend,
       });
 
-      const result = await response.json();
+      const result = response.data;
 
-      if (!response.ok) {
+      if (!result.success) {
         throw new Error(result.message || 'Failed to send OTP');
       }
 
@@ -201,28 +196,23 @@ export default function SignupPage() {
       if (!formData) return;
 
       // Verify OTP with backend
-      const response = await fetch('http://localhost:5001/api/auth/verify-otp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          token: enteredOtp,
-          name: formData.name,
-        }),
+      const response = await authAPI.verifyOtp({
+        email: formData.email,
+        token: enteredOtp,
+        name: formData.name,
       });
 
-      const result = await response.json();
+      const result = response.data;
 
-      if (!response.ok) {
+      if (!result.success) {
         setError(result.message || 'Invalid or expired verification code. Please try again.');
         setIsLoading(false);
         return;
       }
 
       // Login the user with backend token
-      const { user, token } = result.data;
+      const user = result?.data?.user;
+      const token = result?.data?.token;
       login(user, token);
       setStep('success');
 

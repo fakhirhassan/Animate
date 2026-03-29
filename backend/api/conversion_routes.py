@@ -208,15 +208,32 @@ def download_model(job_id):
         response = current_app.make_default_options_response()
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
 
     try:
+        # Verify user is authenticated
+        user_id = get_user_id_from_request()
+        if not user_id:
+            return error_response('Authorization required', 401)
+
         # Validate job_id format
         try:
             uuid.UUID(job_id)
         except ValueError:
             return error_response('Invalid job ID format', 400)
+
+        # Verify the conversion belongs to this user
+        try:
+            from services.conversion_db_service import ConversionDatabaseService
+            db_service = ConversionDatabaseService()
+            from supabase_client.supabase_config import get_supabase
+            supabase = get_supabase()
+            result = supabase.table('conversions').select('user_id').eq('id', job_id).execute()
+            if result.data and result.data[0].get('user_id') != user_id:
+                return error_response('Access denied', 403)
+        except Exception:
+            pass  # If DB check fails, still allow download (backwards compatibility)
 
         # Find the output file
         output_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'output')

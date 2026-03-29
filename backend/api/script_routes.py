@@ -7,6 +7,7 @@ import logging
 from flask import Blueprint, request
 
 from utils.response_formatter import success_response, error_response
+from utils.auth import login_required
 
 # Create blueprint
 bp = Blueprint('script', __name__)
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @bp.route('/analyze', methods=['POST'])
+@login_required
 def analyze_script():
     """
     Parse a text description into a structured 3D scene.

@@ -1,5 +1,7 @@
 'use client';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+
 import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -69,14 +71,14 @@ export default function TwoDToThreeDPage() {
     const fetchHistory = async () => {
       try {
         const response = await conversionAPI.getHistory({ limit: 10 });
-        const conversions = response.data.data.conversions || [];
+        const conversions = response?.data?.data?.conversions || [];
 
         // Transform database conversions to history items
         const historyItems: ConversionHistoryItem[] = conversions.map((conv: any) => ({
           id: conv.id,
-          originalImage: `http://localhost:5001${conv.original_image_url}`,
-          thumbnailUrl: `http://localhost:5001${conv.thumbnail_url}`,
-          modelUrl: `http://localhost:5001${conv.model_url}`,
+          originalImage: `${BACKEND_URL}${conv.original_image_url}`,
+          thumbnailUrl: `${BACKEND_URL}${conv.thumbnail_url}`,
+          modelUrl: `${BACKEND_URL}${conv.model_url}`,
           fileName: conv.file_name,
           format: conv.output_format,
           quality: conv.quality,
@@ -160,7 +162,7 @@ export default function TwoDToThreeDPage() {
         xhr.onerror = () => reject(new Error('Upload failed'));
         xhr.ontimeout = () => reject(new Error('Upload timed out'));
 
-        xhr.open('POST', 'http://localhost:5001/api/convert/2d-to-3d');
+        xhr.open('POST', `${BACKEND_URL}/api/convert/2d-to-3d`);
 
         // Add Authorization header
         const token = localStorage.getItem('authToken');
@@ -209,7 +211,7 @@ export default function TwoDToThreeDPage() {
 
       // Set the download URL for the model
       if (result.success && result.data.download_url) {
-        const downloadUrl = `http://localhost:5001${result.data.download_url}`;
+        const downloadUrl = `${BACKEND_URL}${result.data.download_url}`;
         setModelUrl(downloadUrl);
 
         // Reload history from database to get the saved conversion
@@ -220,9 +222,9 @@ export default function TwoDToThreeDPage() {
           // Transform database conversions to history items
           const historyItems: ConversionHistoryItem[] = conversions.map((conv: any) => ({
             id: conv.id,
-            originalImage: `http://localhost:5001${conv.original_image_url}`,
-            thumbnailUrl: `http://localhost:5001${conv.thumbnail_url}`,
-            modelUrl: `http://localhost:5001${conv.model_url}`,
+            originalImage: `${BACKEND_URL}${conv.original_image_url}`,
+            thumbnailUrl: `${BACKEND_URL}${conv.thumbnail_url}`,
+            modelUrl: `${BACKEND_URL}${conv.model_url}`,
             fileName: conv.file_name,
             format: conv.output_format,
             quality: conv.quality,

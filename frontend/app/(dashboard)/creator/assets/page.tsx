@@ -1,5 +1,7 @@
 'use client';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -60,7 +62,7 @@ export default function AssetsPage() {
   const fetchAssets = async () => {
     try {
       const response = await conversionAPI.getHistory({ limit: 50 });
-      const conversions = response.data.data.conversions || [];
+      const conversions = response?.data?.data?.conversions || [];
       setAssets(conversions);
     } catch (error) {
       console.error('Failed to load assets:', error);
@@ -88,7 +90,7 @@ export default function AssetsPage() {
   };
 
   const handleDownload = (asset: Asset) => {
-    const downloadUrl = `http://localhost:5001${asset.model_url}?download=true`;
+    const downloadUrl = `${BACKEND_URL}${asset.model_url}?download=true`;
     window.open(downloadUrl, '_blank');
   };
 
@@ -241,7 +243,7 @@ export default function AssetsPage() {
                 {/* Thumbnail */}
                 <div className="aspect-square relative overflow-hidden bg-gray-900">
                   <img
-                    src={`http://localhost:5001${asset.thumbnail_url}`}
+                    src={`${BACKEND_URL}${asset.thumbnail_url}`}
                     alt={asset.file_name}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
@@ -321,7 +323,7 @@ export default function AssetsPage() {
                   {/* Thumbnail */}
                   <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-900 flex-shrink-0">
                     <img
-                      src={`http://localhost:5001${asset.thumbnail_url}`}
+                      src={`${BACKEND_URL}${asset.thumbnail_url}`}
                       alt={asset.file_name}
                       className="w-full h-full object-cover"
                     />
@@ -407,7 +409,7 @@ export default function AssetsPage() {
 
               <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg overflow-hidden">
                 <ModelViewer
-                  modelUrl={`http://localhost:5001${selectedAsset.model_url}`}
+                  modelUrl={`${BACKEND_URL}${selectedAsset.model_url}`}
                 />
               </div>
 

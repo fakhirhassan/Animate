@@ -73,12 +73,14 @@ export default function CreatorDashboard() {
     const fetchStats = async () => {
       try {
         const response = await conversionAPI.getStats();
-        const data = response.data.data;
-        setStats({
-          totalConversions: data.total_conversions || 0,
-          thisMonth: data.this_month || 0,
-          storageUsedMb: data.storage_used_mb || 0,
-        });
+        const data = response?.data?.data;
+        if (data) {
+          setStats({
+            totalConversions: data.total_conversions || 0,
+            thisMonth: data.this_month || 0,
+            storageUsedMb: data.storage_used_mb || 0,
+          });
+        }
       } catch (error) {
         console.error('Failed to fetch stats:', error);
       }

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
+import { authAPI } from '@/lib/api';
 import Logo, { LogoMark } from '@/components/shared/Logo';
 
 const loginSchema = z.object({
@@ -44,27 +45,27 @@ export default function LoginPage() {
 
     try {
       // Call backend API for login
-      const response = await fetch('http://localhost:5001/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: data.email,
-          password: data.password,
-        }),
+      const response = await authAPI.login({
+        email: data.email,
+        password: data.password,
       });
 
-      const result = await response.json();
+      const result = response.data;
 
-      if (!response.ok) {
+      if (!result.success) {
         setError(result.message || 'Invalid email or password. Please try again.');
         setIsLoading(false);
         return;
       }
 
       // Login successful - store user data and token
-      const { user, token } = result.data;
+      const user = result?.data?.user;
+      const token = result?.data?.token;
+      if (!user || !token) {
+        setError('Invalid response from server. Please try again.');
+        setIsLoading(false);
+        return;
+      }
       login(user, token);
       setSuccess(true);
 
@@ -74,9 +75,10 @@ export default function LoginPage() {
       } else {
         router.push('/creator');
       }
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      setError('Failed to connect to server. Please try again.');
+      const message = err?.response?.data?.message || 'Failed to connect to server. Please try again.';
+      setError(message);
     } finally {
       setIsLoading(false);
     }

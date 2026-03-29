@@ -8,12 +8,14 @@ from flask import Blueprint, request
 from PIL import Image
 
 from utils.response_formatter import success_response, error_response
+from utils.auth import login_required
 
 bp = Blueprint('animation', __name__)
 logger = logging.getLogger(__name__)
 
 
 @bp.route('/generate', methods=['POST'])
+@login_required
 def generate_full_animation():
     """
     Full animation pipeline: text → scene parse → video + voice → stitched output.
@@ -52,6 +54,7 @@ def generate_full_animation():
 
 
 @bp.route('/image-animate', methods=['POST'])
+@login_required
 def animate_image_with_voice():
     """
     Image-to-animation with optional voice narration.
@@ -100,6 +103,7 @@ def animate_image_with_voice():
 
 
 @bp.route('/text-to-video', methods=['POST'])
+@login_required
 def text_to_video():
     """
     Generate a single video clip from a text prompt.

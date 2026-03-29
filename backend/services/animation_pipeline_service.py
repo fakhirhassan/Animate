@@ -59,7 +59,11 @@ def generate_animation(
 
     # Step 1: Parse scene
     logger.info(f"[{job_id}] Step 1: Parsing scene...")
-    scene = _parse_scene(text)
+    try:
+        scene = _parse_scene(text)
+    except Exception as e:
+        logger.error(f"[{job_id}] Scene parsing failed: {e}")
+        raise RuntimeError(f"Scene parsing failed. Is Ollama running? Error: {e}")
     logger.info(f"[{job_id}] Scene parsed: {scene.get('title', 'Untitled')}")
 
     # Step 2: Build segments with consistent prompts
@@ -71,13 +75,20 @@ def generate_animation(
     video_paths = []
     for i, segment in enumerate(segments):
         logger.info(f"[{job_id}] Generating video segment {i+1}/{len(segments)}")
-        video_path = _generate_video_segment(
-            segment, job_dir, i,
-            num_frames=num_frames_per_segment,
-            num_inference_steps=num_inference_steps,
-            fps=fps,
-        )
-        video_paths.append(video_path)
+        try:
+            video_path = _generate_video_segment(
+                segment, job_dir, i,
+                num_frames=num_frames_per_segment,
+                num_inference_steps=num_inference_steps,
+                fps=fps,
+            )
+            video_paths.append(video_path)
+        except Exception as e:
+            logger.error(f"[{job_id}] Video segment {i+1} failed: {e}")
+            if not video_paths:
+                raise RuntimeError(f"Video generation failed on first segment: {e}")
+            logger.warning(f"[{job_id}] Continuing with {len(video_paths)} successful segments")
+            break
 
     # Step 4: Unload video model to free memory for TTS
     logger.info(f"[{job_id}] Step 3: Unloading video model, loading TTS...")
@@ -86,7 +97,11 @@ def generate_animation(
 
     # Step 5: Generate voice audio for dialogue
     logger.info(f"[{job_id}] Step 4: Generating voice audio...")
-    audio_path = _generate_voice_audio(scene, job_dir, voice_preset)
+    try:
+        audio_path = _generate_voice_audio(scene, job_dir, voice_preset)
+    except Exception as e:
+        logger.error(f"[{job_id}] Voice generation failed: {e}")
+        audio_path = None
 
     # Step 6: Unload TTS model
     from services.voice_generation_service import unload_model as unload_voice
@@ -95,9 +110,17 @@ def generate_animation(
     # Step 7: Stitch everything together with crossfades
     logger.info(f"[{job_id}] Step 5: Stitching final video...")
     crossfade_duration = 0.5
-    final_path = _stitch_final_video(
-        video_paths, audio_path, job_dir, job_id, fps, crossfade_duration
-    )
+    try:
+        final_path = _stitch_final_video(
+            video_paths, audio_path, job_dir, job_id, fps, crossfade_duration
+        )
+    except Exception as e:
+        logger.error(f"[{job_id}] Stitching failed: {e}")
+        if video_paths:
+            final_path = video_paths[0]
+            logger.warning(f"[{job_id}] Falling back to first video segment")
+        else:
+            raise RuntimeError(f"Video stitching failed: {e}")
 
     # Calculate final duration
     clip_duration = num_frames_per_segment / fps
@@ -140,13 +163,17 @@ def generate_animation_from_image(
     # Generate video from text prompt (I2V not available without Wan2.2-5B)
     from services.video_generation_service import generate_video_from_text
     prompt = text if text.strip() else "A scene with smooth cinematic motion, high quality animation"
-    video_result = generate_video_from_text(
-        prompt=prompt,
-        num_frames=num_frames,
-        num_inference_steps=num_inference_steps,
-        fps=fps,
-    )
-    video_path = video_result["filepath"]
+    try:
+        video_result = generate_video_from_text(
+            prompt=prompt,
+            num_frames=num_frames,
+            num_inference_steps=num_inference_steps,
+            fps=fps,
+        )
+        video_path = video_result["filepath"]
+    except Exception as e:
+        logger.error(f"[{job_id}] Video generation failed: {e}")
+        raise RuntimeError(f"Video generation failed: {e}")
 
     # Unload video model before loading TTS
     from services.video_generation_service import unload_model as unload_video
@@ -155,7 +182,11 @@ def generate_animation_from_image(
     # Generate voice if text is provided
     audio_path = None
     if text.strip():
-        audio_path = _generate_voice_audio_from_text(text, job_dir, voice_preset)
+        try:
+            audio_path = _generate_voice_audio_from_text(text, job_dir, voice_preset)
+        except Exception as e:
+            logger.error(f"[{job_id}] Voice generation failed: {e}")
+            audio_path = None
         from services.voice_generation_service import unload_model as unload_voice
         unload_voice()
 
@@ -163,9 +194,13 @@ def generate_animation_from_image(
     final_filename = f"animation_{job_id}.mp4"
     final_path = os.path.join(OUTPUT_DIR, final_filename)
 
-    if audio_path:
-        _merge_video_audio(video_path, audio_path, final_path)
-    else:
+    try:
+        if audio_path:
+            _merge_video_audio(video_path, audio_path, final_path)
+        else:
+            _copy_file(video_path, final_path)
+    except Exception as e:
+        logger.error(f"[{job_id}] Merge failed, using video only: {e}")
         _copy_file(video_path, final_path)
 
     duration = num_frames / fps
@@ -416,6 +451,11 @@ def _concat_videos_with_crossfade(
         _concat_videos_simple(video_paths, output_path, os.path.dirname(output_path))
         return
 
+    if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+        logger.warning(f"Crossfade produced empty file, falling back to simple concat")
+        _concat_videos_simple(video_paths, output_path, os.path.dirname(output_path))
+        return
+
     logger.info(f"Crossfaded {len(video_paths)} videos → {output_path}")
 
 
@@ -458,6 +498,9 @@ def _merge_video_audio(video_path: str, audio_path: str, output_path: str):
     if result.returncode != 0:
         logger.error(f"FFmpeg merge error: {result.stderr}")
         raise RuntimeError(f"FFmpeg merge failed: {result.stderr[:200]}")
+
+    if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+        raise RuntimeError("FFmpeg merge produced empty output file")
 
     logger.info(f"Merged video + audio → {output_path}")
 
