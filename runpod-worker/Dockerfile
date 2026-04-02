@@ -16,6 +16,6 @@ RUN pip install --no-cache-dir --timeout=300 \
 RUN python -c "from huggingface_hub import snapshot_download; \
     snapshot_download('Wan-AI/Wan2.1-T2V-1.3B-Diffusers', local_dir='/models/wan21-t2v')"
 
-COPY handler.py /handler.py
+COPY runpod-worker/handler.py /handler.py
 
 CMD ["python", "-u", "/handler.py"]
