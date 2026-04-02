@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Sparkles,
   Film,
+  ImageIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
@@ -37,6 +38,12 @@ const navItems = [
     href: '/creator/animate',
     icon: Film,
     description: 'Text to 3D animation',
+  },
+  {
+    name: 'Text to Image',
+    href: '/creator/text-to-image',
+    icon: ImageIcon,
+    description: 'Generate images from text',
   },
   {
     name: 'Assets',

@@ -66,7 +66,8 @@ export default function LoginPage() {
         setIsLoading(false);
         return;
       }
-      login(user, token);
+      const refreshToken = result?.data?.refresh_token;
+      login(user, token, refreshToken);
       setSuccess(true);
 
       // Redirect based on role immediately after login

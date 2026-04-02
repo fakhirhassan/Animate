@@ -213,7 +213,8 @@ export default function SignupPage() {
       // Login the user with backend token
       const user = result?.data?.user;
       const token = result?.data?.token;
-      login(user, token);
+      const refreshToken = result?.data?.refresh_token;
+      login(user, token, refreshToken);
       setStep('success');
 
       // Redirect after success animation
