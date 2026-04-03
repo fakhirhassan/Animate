@@ -11,7 +11,9 @@ RUN pip install --no-cache-dir --timeout=300 \
     sentencepiece \
     safetensors \
     huggingface_hub \
-    ftfy
+    ftfy \
+    imageio \
+    imageio-ffmpeg
 
 # Download Wan2.1-T2V-1.3B model (baked into image)
 RUN python -c "from huggingface_hub import snapshot_download; \
