@@ -56,7 +56,8 @@ def load_t2v():
         model_path, vae=vae, torch_dtype=torch.float16
     )
     T2V_PIPE.enable_model_cpu_offload()
-    T2V_PIPE.vae.enable_tiling()
+    if hasattr(T2V_PIPE.vae, 'enable_tiling'):
+        T2V_PIPE.vae.enable_tiling()
     print("Wan2.1 T2V loaded on CUDA.")
     return T2V_PIPE
 

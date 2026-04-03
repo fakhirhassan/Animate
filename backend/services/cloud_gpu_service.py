@@ -126,7 +126,7 @@ def generate_video_cloud(
         }
     }
 
-    result = _runpod_request(_get_endpoint_id(), payload, timeout=600)
+    result = _runpod_request(_get_endpoint_id(), payload, timeout=1800)  # 30 min for cold start + generation
 
     # Decode base64 video and save
     video_b64 = result.get("video_base64")
