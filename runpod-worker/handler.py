@@ -46,9 +46,9 @@ def load_t2v():
 
     from diffusers import WanPipeline, AutoencoderKLWan
 
-    model_path = download_model("Wan-AI/Wan2.1-T2V-1.3B-Diffusers", "wan21-t2v")
+    model_path = download_model("Wan-AI/Wan2.2-TI2V-5B-Diffusers", "wan22-ti2v-5b")
 
-    print(f"Loading Wan2.1 T2V pipeline...")
+    print(f"Loading Wan2.2 TI2V-5B pipeline...")
     vae = AutoencoderKLWan.from_pretrained(
         model_path, subfolder="vae", torch_dtype=torch.float32
     )
@@ -58,7 +58,7 @@ def load_t2v():
     T2V_PIPE.enable_model_cpu_offload()
     if hasattr(T2V_PIPE.vae, 'enable_tiling'):
         T2V_PIPE.vae.enable_tiling()
-    print("Wan2.1 T2V loaded on CUDA.")
+    print("Wan2.2 TI2V-5B loaded on CUDA.")
     return T2V_PIPE
 
 
