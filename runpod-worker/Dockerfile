@@ -7,8 +7,8 @@ RUN pip install --no-cache-dir --timeout=300 \
     torch==2.5.1 \
     torchvision==0.20.1 \
     runpod>=1.7.0 \
-    diffusers==0.32.2 \
-    transformers>=4.46.0 \
+    diffusers==0.33.0 \
+    transformers>=4.46.0,<5.0.0 \
     accelerate>=0.34.0 \
     sentencepiece \
     safetensors \
