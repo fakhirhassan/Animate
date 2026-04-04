@@ -106,32 +106,83 @@ def generate_video_cloud(
     num_frames: int = 81,
     num_inference_steps: int = 25,
     fps: int = 16,
-    height: int = 480,
-    width: int = 832,
+    height: int = 832,
+    width: int = 480,
     seed: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Generate video using RunPod cloud GPU."""
+    """
+    Generate video using RunPod cloud GPU.
+    Pipeline: SDXL (generate image from prompt) → Wan2.2 I2V (animate the image)
+    """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    payload = {
+    # Step 1: Generate image from text prompt using SDXL endpoint
+    logger.info(f"Cloud T2V Step 1: Generating image from prompt...")
+    t2i_endpoint = _get_t2i_endpoint_id()
+    if not t2i_endpoint:
+        raise RuntimeError("T2I endpoint not configured — needed for video pipeline")
+
+    image_payload = {
         "input": {
-            "task": "text_to_video",
             "prompt": prompt,
-            "num_frames": num_frames,
-            "num_inference_steps": num_inference_steps,
-            "fps": fps,
-            "height": height,
+            "negative_prompt": "blurry, low quality, deformed, ugly, text, watermark",
             "width": width,
-            "seed": seed,
+            "height": height,
+            "num_inference_steps": 25,
+            "guidance_scale": 7.5,
+            "num_images": 1,
+        }
+    }
+    if seed is not None:
+        image_payload["input"]["seed"] = seed
+
+    image_result = _runpod_request(t2i_endpoint, image_payload, timeout=120)
+
+    # Extract base64 image
+    image_data = image_result.get("image_url") or image_result.get("image_base64")
+    if not image_data and image_result.get("images"):
+        image_data = image_result["images"][0]
+    if not image_data:
+        raise RuntimeError("Failed to generate image for video pipeline")
+
+    # Strip data URI prefix if present
+    if isinstance(image_data, str) and image_data.startswith("data:"):
+        image_b64 = image_data.split(",", 1)[1]
+    else:
+        image_b64 = image_data
+
+    logger.info(f"Cloud T2V Step 2: Animating image with Wan2.2...")
+
+    # Step 2: Send image to Wan2.2 I2V endpoint for animation
+    video_endpoint = _get_endpoint_id()
+    video_payload = {
+        "input": {
+            "prompt": prompt,
+            "image_base64": image_b64,
+            "width": width,
+            "height": height,
+            "length": num_frames,
+            "steps": min(num_inference_steps, 30),
+            "cfg": 2.0,
+            "seed": seed or 42,
         }
     }
 
-    result = _runpod_request(_get_endpoint_id(), payload, timeout=1800)  # 30 min for cold start + generation
+    result = _runpod_request(video_endpoint, video_payload, timeout=1800)
 
-    # Decode base64 video and save
-    video_b64 = result.get("video_base64")
+    # Extract video — could be base64 string or dict with video field
+    video_b64 = None
+    if isinstance(result, dict):
+        video_b64 = result.get("video_base64") or result.get("video") or result.get("output")
+    elif isinstance(result, str):
+        video_b64 = result
+
+    # Strip data URI prefix if present
+    if isinstance(video_b64, str) and video_b64.startswith("data:"):
+        video_b64 = video_b64.split(",", 1)[1]
+
     if not video_b64:
-        raise RuntimeError("Cloud GPU returned no video data")
+        raise RuntimeError(f"Cloud GPU returned unexpected video format: {str(result)[:200]}")
 
     video_id = str(uuid.uuid4())[:8]
     filename = f"video_{video_id}.mp4"
