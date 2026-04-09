@@ -122,7 +122,7 @@ export default function AdminDashboard() {
       const statsResponse = await adminAPI.getSystemStats();
       console.log('✅ Stats response:', statsResponse.data);
 
-      const statsData = statsResponse.data.data;
+      const statsData = statsResponse?.data?.data || {};
       console.log('📈 Stats data:', statsData);
       console.log('📊 Total Projects:', statsData.totalProjects);
 
@@ -136,7 +136,7 @@ export default function AdminDashboard() {
       // Fetch users from backend
       const usersResponse = await adminAPI.getUsers();
       console.log('👥 Users response:', usersResponse.data);
-      setUsers(usersResponse.data.data.users || []);
+      setUsers(usersResponse?.data?.data?.users || []);
 
       // Fetch user growth data
       const growthResponse = await adminAPI.getUserGrowth(6);

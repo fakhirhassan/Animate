@@ -7,12 +7,14 @@ import logging
 from flask import Blueprint, request
 
 from utils.response_formatter import success_response, error_response
+from utils.auth import login_required
 
 bp = Blueprint('voice', __name__)
 logger = logging.getLogger(__name__)
 
 
 @bp.route('/generate', methods=['POST'])
+@login_required
 def generate_voice():
     """
     Generate voice audio from text using Kokoro TTS.

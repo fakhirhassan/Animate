@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
+import { authAPI } from '@/lib/api';
+import { LogoMark } from '@/components/shared/Logo';
 
 const signupSchema = z.object({
   name: z
@@ -92,15 +94,20 @@ export default function SignupPage() {
 
   const sendOTP = async (email: string, name: string, pwd: string, isResend: boolean = false) => {
     try {
-      const response = await fetch('http://localhost:5001/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, password: pwd, is_resend: isResend }),
+      const response = await authAPI.sendOtp({
+        email,
+        name,
+        password,
+        is_resend: isResend,
       });
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || 'Failed to send OTP');
+      const result = response.data;
 
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to send OTP');
+      }
+
+      // Start resend timer (60 seconds)
       setResendTimer(60);
       const interval = setInterval(() => {
         setResendTimer((prev) => {
@@ -169,21 +176,27 @@ export default function SignupPage() {
 
     try {
       if (!formData) return;
-      const response = await fetch('http://localhost:5001/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email, token: enteredOtp, name: formData.name }),
+
+      // Verify OTP with backend
+      const response = await authAPI.verifyOtp({
+        email: formData.email,
+        token: enteredOtp,
+        name: formData.name,
       });
 
-      const result = await response.json();
-      if (!response.ok) {
+      const result = response.data;
+
+      if (!result.success) {
         setError(result.message || 'Invalid or expired verification code. Please try again.');
         setIsLoading(false);
         return;
       }
 
-      const { user, token } = result.data;
-      login(user, token);
+      // Login the user with backend token
+      const user = result?.data?.user;
+      const token = result?.data?.token;
+      const refreshToken = result?.data?.refresh_token;
+      login(user, token, refreshToken);
       setStep('success');
       setTimeout(() => { router.push('/creator'); }, 2000);
     } catch (err: unknown) {

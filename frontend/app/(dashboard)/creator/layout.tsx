@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -41,6 +41,12 @@ const navItems = [
     description: 'Text to 3D animation',
   },
   {
+    name: 'Text to Image',
+    href: '/creator/text-to-image',
+    icon: ImageIcon,
+    description: 'Generate images from text',
+  },
+  {
     name: 'Assets',
     href: '/creator/assets',
     icon: FolderOpen,
@@ -69,13 +75,34 @@ export default function CreatorLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, token, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    if (!token || !user) {
+      router.push('/login');
+      return;
+    }
+    if (user.role === 'admin') {
+      router.push('/admin');
+      return;
+    }
+    setAuthChecked(true);
+  }, [token, user, router]);
 
   const handleLogout = () => {
     logout();
     router.push('/login');
   };
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a1f]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
 
   const isActive = (href: string) => {
     if (href === '/creator') {

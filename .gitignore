@@ -8,6 +8,12 @@ venv/
 env/
 .venv/
 
+# Environment files (secrets)
+.env
+.env.local
+!.env.example
+!.env.local.example
+
 # Model weights (large files)
 /models/
 *.safetensors

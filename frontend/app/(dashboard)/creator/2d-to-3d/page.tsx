@@ -1,5 +1,7 @@
 'use client';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+
 import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -67,9 +69,9 @@ export default function TwoDToThreeDPage() {
         const conversions = response.data.data.conversions || [];
         const historyItems: ConversionHistoryItem[] = conversions.map((conv: any) => ({
           id: conv.id,
-          originalImage: `http://localhost:5001${conv.original_image_url}`,
-          thumbnailUrl: `http://localhost:5001${conv.thumbnail_url}`,
-          modelUrl: `http://localhost:5001${conv.model_url}`,
+          originalImage: `${BACKEND_URL}${conv.original_image_url}`,
+          thumbnailUrl: `${BACKEND_URL}${conv.thumbnail_url}`,
+          modelUrl: `${BACKEND_URL}${conv.model_url}`,
           fileName: conv.file_name,
           format: conv.output_format,
           quality: conv.quality,
@@ -146,7 +148,7 @@ export default function TwoDToThreeDPage() {
       setConversion({ status: 'completed', progress: 100, message: 'Conversion complete!' });
 
       if (result.success && result.data.download_url) {
-        const downloadUrl = `http://localhost:5001${result.data.download_url}`;
+        const downloadUrl = `${BACKEND_URL}${result.data.download_url}`;
         setModelUrl(downloadUrl);
         try {
           const historyResponse = await conversionAPI.getHistory({ limit: 10 });

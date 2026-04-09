@@ -25,13 +25,85 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Track if we're already refreshing to avoid infinite loops
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (token: string) => void; reject: (error: any) => void }> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (token) resolve(token);
+    else reject(error);
+  });
+  failedQueue = [];
+};
+
+// Response interceptor — auto-refresh expired tokens
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      const isAuthPage = window.location.pathname.startsWith('/login') || window.location.pathname.startsWith('/signup');
+      if (isAuthPage) return Promise.reject(error);
+
+      // Try to refresh the token
+      const authStorage = localStorage.getItem('auth-storage');
+      let refreshToken: string | null = null;
+      try {
+        const parsed = JSON.parse(authStorage || '{}');
+        refreshToken = parsed?.state?.refreshToken;
+      } catch {}
+
+      if (!refreshToken) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('auth-storage');
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        });
+      }
+
+      isRefreshing = true;
+      originalRequest._retry = true;
+
+      try {
+        const response = await api.post('/auth/refresh', { refresh_token: refreshToken });
+        const newToken = response.data?.data?.token;
+        const newRefreshToken = response.data?.data?.refresh_token;
+
+        if (newToken) {
+          localStorage.setItem('authToken', newToken);
+          // Update zustand store
+          try {
+            const store = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+            if (store.state) {
+              store.state.token = newToken;
+              store.state.refreshToken = newRefreshToken || refreshToken;
+              localStorage.setItem('auth-storage', JSON.stringify(store));
+            }
+          } catch {}
+
+          processQueue(null, newToken);
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        }
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('auth-storage');
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
     }
     return Promise.reject(error);
   }
@@ -54,6 +126,12 @@ export const authAPI = {
 
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),
+
+  sendOtp: (data: { email: string; name?: string; password?: string; is_resend?: boolean }) =>
+    api.post('/auth/send-otp', data),
+
+  verifyOtp: (data: { email: string; token: string; name?: string }) =>
+    api.post('/auth/verify-otp', data),
 };
 
 // Projects API
@@ -170,6 +248,19 @@ export const voiceAPI = {
     api.post('/voice/generate', data, { timeout: 60000 }),
 
   getPresets: () => api.get('/voice/presets'),
+};
+
+// Image Generation API (Text-to-Image)
+export const imageAPI = {
+  generate: (data: {
+    prompt: string;
+    width?: number;
+    height?: number;
+    num_inference_steps?: number;
+    seed?: number;
+  }) => api.post('/image/generate', data, { timeout: 300000 }), // 5 min timeout
+
+  checkGenerator: () => api.get('/image/check'),
 };
 
 export default api;

@@ -1,5 +1,7 @@
 'use client';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -56,7 +58,7 @@ export default function AssetsPage() {
   const fetchAssets = async () => {
     try {
       const response = await conversionAPI.getHistory({ limit: 50 });
-      const conversions = response.data.data.conversions || [];
+      const conversions = response?.data?.data?.conversions || [];
       setAssets(conversions);
     } catch (error) {
       console.error('Failed to load assets:', error);
@@ -81,7 +83,7 @@ export default function AssetsPage() {
   };
 
   const handleDownload = (asset: Asset) => {
-    const downloadUrl = `http://localhost:5001${asset.model_url}?download=true`;
+    const downloadUrl = `${BACKEND_URL}${asset.model_url}?download=true`;
     window.open(downloadUrl, '_blank');
   };
 

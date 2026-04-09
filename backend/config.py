@@ -50,9 +50,15 @@ class Config:
     MAX_PROCESSING_TIME = 600  # 10 minutes max processing time (video gen is slow)
     ENABLE_GPU = os.getenv('ENABLE_GPU', 'true').lower() == 'true'
 
+    # RunPod Cloud GPU settings
+    # Set GPU_MODE to 'cloud' to use RunPod, 'local' for local GPU, 'auto' tries local first
+    GPU_MODE = os.getenv('GPU_MODE', 'auto')  # 'local', 'cloud', 'auto'
+    RUNPOD_API_KEY = os.getenv('RUNPOD_API_KEY', '')
+    RUNPOD_ENDPOINT_ID = os.getenv('RUNPOD_ENDPOINT_ID', '')
+    RUNPOD_T2I_ENDPOINT_ID = os.getenv('RUNPOD_T2I_ENDPOINT_ID', '')
+
     # Animation pipeline settings
-    # RTX A4000 (15GB VRAM): '1.3b' fits easily, '5b' fits (use for I2V chaining), '14b' requires offloading
-    VIDEO_MODEL = os.getenv('VIDEO_MODEL', '1.3b')  # '1.3b' or '5b' or '14b'
+    VIDEO_MODEL = os.getenv('VIDEO_MODEL', '1.3b')
     DEFAULT_VOICE = os.getenv('DEFAULT_VOICE', 'af_heart')
     DEFAULT_NUM_CLIPS = int(os.getenv('DEFAULT_NUM_CLIPS', '4'))
     # RTX A4000: 81 frames = 5s clips at 16fps (was 33=2s on Mac, GPU is much faster)
