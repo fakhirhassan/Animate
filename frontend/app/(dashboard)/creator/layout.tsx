@@ -13,10 +13,12 @@ import {
   Menu,
   X,
   ChevronRight,
-  Sparkles,
   Film,
+  Zap,
+  HelpCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuthStore } from '@/store/authStore';
 
 const navItems = [
@@ -83,29 +85,34 @@ export default function CreatorLayout({
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#0a0a1f] backdrop-blur-sm border-b border-white/10 z-50 px-4 flex items-center justify-between">
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-surface/80 backdrop-blur-xl border-b border-border z-50 px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            className="p-2 hover:bg-surface-high rounded-lg transition-colors"
           >
-            <Menu className="h-5 w-5 text-gray-400" />
+            <Menu className="h-5 w-5 text-muted" />
           </button>
           <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-blue-500" />
-            <span className="font-semibold text-white">AniMate</span>
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <Zap className="h-4 w-4 text-white" fill="currentColor" />
+            </div>
+            <span className="font-headline font-bold text-sm tracking-widest uppercase text-foreground">ANIAD</span>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleLogout}
-          className="text-gray-400 hover:text-red-600"
-        >
-          <LogOut className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="text-muted hover:text-destructive"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
       </header>
 
       {/* Mobile Sidebar Overlay */}
@@ -124,11 +131,10 @@ export default function CreatorLayout({
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="lg:hidden fixed left-0 top-0 bottom-0 w-[280px] bg-[#0a0a1f] z-50 shadow-xl"
+              className="lg:hidden fixed left-0 top-0 bottom-0 w-[280px] bg-surface z-50 shadow-xl"
             >
               <MobileSidebar
                 user={user}
-                pathname={pathname}
                 isActive={isActive}
                 onClose={() => setSidebarOpen(false)}
                 onLogout={handleLogout}
@@ -139,17 +145,16 @@ export default function CreatorLayout({
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-[260px] bg-[#0a0a1f] border-r border-white/10 flex-col z-40">
+      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 bg-surface border-r border-border flex-col z-40">
         <DesktopSidebar
           user={user}
-          pathname={pathname}
           isActive={isActive}
           onLogout={handleLogout}
         />
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-[260px] pt-16 lg:pt-0 min-h-screen">
+      <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
         {children}
       </main>
     </div>
@@ -158,29 +163,32 @@ export default function CreatorLayout({
 
 function DesktopSidebar({
   user,
-  pathname,
   isActive,
   onLogout,
 }: {
   user: any;
-  pathname: string;
   isActive: (href: string) => boolean;
   onLogout: () => void;
 }) {
   return (
     <>
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-white/10">
-        <Link href="/creator" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-white" />
+      <div className="px-8 py-8 mb-2">
+        <Link href="/creator" className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+            <Zap className="h-5 w-5 text-white" fill="currentColor" />
           </div>
-          <span className="font-bold text-xl text-white">AniMate</span>
+          <div>
+            <h1 className="text-xs font-semibold tracking-widest font-label text-foreground uppercase">
+              Creator Hub
+            </h1>
+            <p className="text-[10px] text-muted font-label">The Electric Void</p>
+          </div>
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <NavItem
             key={item.href}
@@ -190,17 +198,28 @@ function DesktopSidebar({
         ))}
       </nav>
 
+      {/* Bottom Section */}
+      <div className="px-6 py-4 mt-auto space-y-2">
+        <Button className="w-full font-label text-xs tracking-widest uppercase">
+          New Project
+        </Button>
+        <button className="flex items-center gap-4 text-muted px-6 py-4 hover:text-primary transition-colors w-full">
+          <HelpCircle className="h-5 w-5" />
+          <span className="text-[10px] font-label uppercase tracking-widest">Help Center</span>
+        </button>
+      </div>
+
       {/* User Section */}
-      <div className="p-4 border-t border-white/10">
+      <div className="p-4 border-t border-border">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-emerald-400 rounded-full flex items-center justify-center text-white font-medium text-sm">
+          <div className="w-9 h-9 rounded-full border border-border bg-surface-high flex items-center justify-center text-sm font-bold text-primary">
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-medium text-foreground truncate">
               {user?.name || 'User'}
             </p>
-            <p className="text-xs text-gray-400 truncate">
+            <p className="text-xs text-muted truncate">
               {user?.email || 'user@example.com'}
             </p>
           </div>
@@ -208,7 +227,7 @@ function DesktopSidebar({
         <Button
           variant="ghost"
           onClick={onLogout}
-          className="w-full justify-start text-gray-400 hover:text-red-400 hover:bg-red-500/10"
+          className="w-full justify-start text-muted hover:text-destructive hover:bg-destructive/10"
         >
           <LogOut className="h-4 w-4 mr-2" />
           Log out
@@ -220,13 +239,11 @@ function DesktopSidebar({
 
 function MobileSidebar({
   user,
-  pathname,
   isActive,
   onClose,
   onLogout,
 }: {
   user: any;
-  pathname: string;
   isActive: (href: string) => boolean;
   onClose: () => void;
   onLogout: () => void;
@@ -234,23 +251,23 @@ function MobileSidebar({
   return (
     <>
       {/* Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-white/10">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-white" />
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <Zap className="h-4 w-4 text-white" fill="currentColor" />
           </div>
-          <span className="font-bold text-xl text-white">AniMate</span>
+          <span className="font-headline font-bold text-sm tracking-widest uppercase">ANIAD</span>
         </div>
         <button
           onClick={onClose}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+          className="p-2 hover:bg-surface-high rounded-lg transition-colors"
         >
-          <X className="h-5 w-5 text-gray-400" />
+          <X className="h-5 w-5 text-muted" />
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <NavItem
             key={item.href}
@@ -262,16 +279,16 @@ function MobileSidebar({
       </nav>
 
       {/* User Section */}
-      <div className="p-4 border-t border-white/10">
+      <div className="p-4 border-t border-border">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-emerald-400 rounded-full flex items-center justify-center text-white font-medium text-sm">
+          <div className="w-9 h-9 rounded-full border border-border bg-surface-high flex items-center justify-center text-sm font-bold text-primary">
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-medium text-foreground truncate">
               {user?.name || 'User'}
             </p>
-            <p className="text-xs text-gray-400 truncate">
+            <p className="text-xs text-muted truncate">
               {user?.email || 'user@example.com'}
             </p>
           </div>
@@ -279,7 +296,7 @@ function MobileSidebar({
         <Button
           variant="ghost"
           onClick={onLogout}
-          className="w-full justify-start text-gray-400 hover:text-red-400 hover:bg-red-500/10"
+          className="w-full justify-start text-muted hover:text-destructive hover:bg-destructive/10"
         >
           <LogOut className="h-4 w-4 mr-2" />
           Log out
@@ -302,10 +319,10 @@ function NavItem({
 
   if (item.disabled) {
     return (
-      <div className="relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 cursor-not-allowed">
+      <div className="relative flex items-center gap-4 px-6 py-4 text-muted/50 cursor-not-allowed">
         <Icon className="h-5 w-5" />
-        <span className="font-medium text-sm">{item.name}</span>
-        <span className="ml-auto text-[10px] uppercase tracking-wide bg-white/10 text-gray-500 px-1.5 py-0.5 rounded">
+        <span className="text-xs font-semibold tracking-widest font-label uppercase">{item.name}</span>
+        <span className="ml-auto text-[9px] uppercase tracking-wide bg-surface-high text-muted px-1.5 py-0.5 rounded">
           Soon
         </span>
       </div>
@@ -317,28 +334,19 @@ function NavItem({
       href={item.href}
       onClick={onClick}
       className={`
-        relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
+        relative flex items-center gap-4 px-6 py-4 transition-all duration-200
         ${
           isActive
-            ? 'bg-gradient-to-r from-blue-500/20 to-emerald-500/20 text-white'
-            : 'text-gray-400 hover:bg-white/10 hover:text-white'
+            ? 'bg-primary/10 text-primary border-l-4 border-primary'
+            : 'text-muted hover:bg-surface-high hover:text-accent border-l-4 border-transparent'
         }
       `}
     >
-      {/* Active Indicator */}
-      {isActive && (
-        <motion.div
-          layoutId="activeIndicator"
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-gradient-to-b from-blue-500 to-emerald-500 rounded-r-full"
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        />
-      )}
-
-      <Icon className={`h-5 w-5 ${isActive ? 'text-blue-400' : ''}`} />
-      <span className="font-medium text-sm">{item.name}</span>
+      <Icon className="h-5 w-5" />
+      <span className="text-xs font-semibold tracking-widest font-label uppercase">{item.name}</span>
 
       {isActive && (
-        <ChevronRight className="h-4 w-4 ml-auto text-emerald-400" />
+        <ChevronRight className="h-4 w-4 ml-auto" />
       )}
     </Link>
   );

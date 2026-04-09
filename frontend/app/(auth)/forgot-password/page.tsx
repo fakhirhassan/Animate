@@ -1,17 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import Link from 'next/link';
-import { Mail, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Mail, Loader2, CheckCircle2, ArrowLeft, Zap, ShieldQuestion } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { LogoMark } from '@/components/shared/Logo';
 import { authAPI } from '@/lib/api';
 
 const forgotPasswordSchema = z.object({
@@ -20,11 +18,29 @@ const forgotPasswordSchema = z.object({
 
 type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 
+const floatingOrbs = [
+  { size: 100, x: '20%', y: '30%', delay: 0, duration: 8, color: 'bg-neon-violet/10' },
+  { size: 70, x: '70%', y: '60%', delay: 2, duration: 10, color: 'bg-neon-cyan/10' },
+  { size: 60, x: '50%', y: '15%', delay: 1, duration: 7, color: 'bg-neon-pink/10' },
+];
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.12, delayChildren: 0.2 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: 'easeOut' } },
+};
+
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const router = useRouter();
 
   const {
     register,
@@ -51,130 +67,211 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-20 px-4 bg-[#0a0a1f] relative overflow-hidden">
-      {/* Animated Grid Background */}
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#1a1a3e_1px,transparent_1px),linear-gradient(to_bottom,#1a1a3e_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+    <div className="min-h-screen flex bg-background overflow-hidden">
+      {/* Left Side: Visual Branding */}
+      <section className="hidden lg:flex flex-col flex-1 relative items-center justify-center bg-void-black dot-grid border-r border-border">
+        {/* Floating Orbs */}
+        {floatingOrbs.map((orb, i) => (
+          <motion.div
+            key={i}
+            className={`absolute rounded-full ${orb.color} blur-2xl`}
+            style={{ width: orb.size, height: orb.size, left: orb.x, top: orb.y }}
+            animate={{
+              y: [0, -30, 0, 30, 0],
+              x: [0, 20, 0, -20, 0],
+              scale: [1, 1.2, 1, 0.9, 1],
+            }}
+            transition={{
+              duration: orb.duration,
+              delay: orb.delay,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            }}
+          />
+        ))}
 
-      {/* Animated Background Blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
-
-      {/* Forgot Password Form */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="relative z-10 w-full max-w-md"
-      >
-        <div className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-2xl p-8 border border-white/10">
-          {/* Header */}
-          <div className="text-center mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, ease: 'easeOut' }}
+          className="z-10 flex flex-col items-center gap-12 max-w-lg text-center"
+        >
+          <motion.div
+            animate={{
+              scale: [1, 1.05, 1],
+              boxShadow: [
+                '0 0 20px rgba(139, 92, 246, 0.3)',
+                '0 0 40px rgba(139, 92, 246, 0.5)',
+                '0 0 20px rgba(139, 92, 246, 0.3)',
+              ],
+            }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            className="w-32 h-32 bg-void-elevated rounded-full flex items-center justify-center border-2 border-neon-violet"
+          >
             <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="mb-4"
+              animate={{ rotate: [0, 10, -10, 0] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <LogoMark size={48} animated={true} />
+              <ShieldQuestion className="w-16 h-16 text-neon-cyan" />
             </motion.div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Forgot Password?
-            </h1>
-            <p className="text-gray-400">
+          </motion.div>
+
+          <div className="space-y-4">
+            <motion.h1
+              initial={{ opacity: 0, letterSpacing: '0.3em' }}
+              animate={{ opacity: 1, letterSpacing: '-0.05em' }}
+              transition={{ duration: 1.2, delay: 0.3 }}
+              className="font-headline text-5xl font-black text-neon-cyan uppercase"
+            >
+              ANIAD AI
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.8 }}
+              className="text-xl text-void-muted font-light tracking-wide leading-relaxed"
+            >
+              Forgot your <span className="text-neon-pink font-bold uppercase">Password</span>?
+              <br />No worries, we&apos;ll help you reset it.
+            </motion.p>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Right Side: Form */}
+      <section className="flex-1 flex flex-col items-center justify-center px-6 sm:px-12 bg-background relative">
+        {/* Subtle background glow */}
+        <motion.div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl"
+          animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.5, 0.3] }}
+          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+        />
+
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+          className="lg:hidden absolute top-8 left-8 flex items-center gap-3"
+        >
+          <Zap className="w-5 h-5 text-primary" fill="currentColor" />
+          <span className="font-headline text-xl font-bold tracking-tighter uppercase">ANIAD</span>
+        </motion.div>
+
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="w-full max-w-md space-y-8 z-10"
+        >
+          <motion.div variants={itemVariants} className="text-center lg:text-left">
+            <h2 className="font-headline text-3xl font-bold text-foreground mb-2 uppercase tracking-tight">
+              Forgot Password
+            </h2>
+            <p className="text-muted font-medium">
               Enter your email and we&apos;ll send you reset instructions
             </p>
-          </div>
+          </motion.div>
 
-          {/* Success Message */}
-          {success && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-2"
-            >
-              <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
-              <span>Check your email for reset instructions!</span>
-            </motion.div>
-          )}
+          <motion.div
+            variants={itemVariants}
+            whileHover={{ boxShadow: '0 0 30px rgba(139, 92, 246, 0.1)' }}
+            className="bg-surface border border-border p-8 rounded-lg shadow-2xl"
+          >
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300 }}
+                className="bg-success/10 border border-success/30 text-success px-4 py-3 rounded mb-6 flex items-center gap-2"
+              >
+                <motion.div
+                  initial={{ scale: 0, rotate: -180 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                >
+                  <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
+                </motion.div>
+                <span>Check your email for reset instructions!</span>
+              </motion.div>
+            )}
 
-          {/* Error Message */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg mb-6"
-            >
-              {error}
-            </motion.div>
-          )}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, x: -10 }}
+                animate={{ opacity: 1, y: 0, x: 0 }}
+                transition={{ type: 'spring', stiffness: 300 }}
+                className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded mb-6"
+              >
+                {error}
+              </motion.div>
+            )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-300 font-medium">
-                Email Address
-              </Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500 focus:ring-blue-500"
-                  {...register('email')}
-                  disabled={success}
-                />
-              </div>
-              {errors.email && (
-                <p className="text-red-400 text-sm">{errors.email.message}</p>
-              )}
-            </div>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <motion.div variants={itemVariants} className="space-y-2 group">
+                <Label htmlFor="email" className="font-label text-xs font-semibold uppercase tracking-widest text-muted group-focus-within:text-primary transition-colors">
+                  Email Address
+                </Label>
+                <motion.div whileFocusWithin={{ scale: 1.01 }} className="relative flex items-center">
+                  <Mail className="absolute left-4 h-5 w-5 text-muted" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    className="pl-12 bg-input border-border text-foreground placeholder:text-muted/40 focus:ring-1 focus:ring-primary focus:border-primary h-12"
+                    {...register('email')}
+                    disabled={success}
+                  />
+                </motion.div>
+                {errors.email && (
+                  <motion.p
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="text-destructive text-sm"
+                  >
+                    {errors.email.message}
+                  </motion.p>
+                )}
+              </motion.div>
 
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white py-6 text-lg font-semibold rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 mt-6"
-              disabled={isLoading || success}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Sending...
-                </>
-              ) : success ? (
-                <>
-                  <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Email Sent!
-                </>
-              ) : (
-                'Send Reset Instructions'
-              )}
-            </Button>
-          </form>
+              <motion.div variants={itemVariants}>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                  <Button
+                    type="submit"
+                    className="w-full h-12 font-headline font-bold uppercase tracking-widest"
+                    disabled={isLoading || success}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Sending...
+                      </>
+                    ) : success ? (
+                      <>
+                        <CheckCircle2 className="mr-2 h-5 w-5" />
+                        Email Sent
+                      </>
+                    ) : (
+                      'Send Reset Code'
+                    )}
+                  </Button>
+                </motion.div>
+              </motion.div>
+            </form>
+          </motion.div>
 
-          {/* Back to Login */}
-          <div className="mt-6 text-center">
+          <motion.div variants={itemVariants} className="text-center pt-4">
             <Link
               href="/login"
-              className="text-blue-400 hover:text-blue-300 font-semibold inline-flex items-center gap-2"
+              className="text-accent hover:text-primary font-semibold inline-flex items-center gap-2 transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Sign In
+              <motion.div whileHover={{ x: -4 }} className="flex items-center gap-2">
+                <ArrowLeft className="h-4 w-4" />
+                Back to Sign In
+              </motion.div>
             </Link>
-          </div>
-        </div>
-
-        {/* Bottom Note */}
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Remember your password?{' '}
-          <Link href="/login" className="text-blue-400 hover:underline">
-            Sign in
-          </Link>
-        </p>
-      </motion.div>
+          </motion.div>
+        </motion.div>
+      </section>
     </div>
   );
 }

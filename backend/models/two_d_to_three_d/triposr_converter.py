@@ -6,6 +6,7 @@ Note: TripoSR requires the 'tsr' module to be installed.
 If not available, this converter will not work and the system
 will fall back to MiDaS depth estimation.
 """
+from __future__ import annotations
 
 import os
 import sys

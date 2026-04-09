@@ -29,6 +29,7 @@
     "internmap": "^2.0.3",
     "lucide-react": "^0.554.0",
     "next": "14.2.33",
+    "next-themes": "^0.4.6",
     "react": "^18",
     "react-dom": "^18",
     "react-dropzone": "^14.3.8",
