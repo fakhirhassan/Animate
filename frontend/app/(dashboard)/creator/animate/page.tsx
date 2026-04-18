@@ -22,11 +22,33 @@ import { animationAPI, voiceAPI } from '@/lib/api';
 type Stage = 'input' | 'generating' | 'preview';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+const VIDEO_HISTORY_KEY = 'mesh_video_history';
+const MAX_HISTORY = 12;
 
 interface VoicePreset {
   id: string;
   name: string;
   language: string;
+}
+
+interface VideoHistoryItem {
+  url: string;
+  prompt: string;
+  filename: string;
+  duration: string;
+  createdAt: string;
+}
+
+function loadVideoHistory(): VideoHistoryItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(VIDEO_HISTORY_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveVideoHistory(items: VideoHistoryItem[]) {
+  localStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY)));
 }
 
 export default function AnimatePage() {
@@ -35,6 +57,7 @@ export default function AnimatePage() {
   const [error, setError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoMeta, setVideoMeta] = useState<any>(null);
+  const [videoHistory, setVideoHistory] = useState<VideoHistoryItem[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [voicePresets, setVoicePresets] = useState<VoicePreset[]>([]);
   const [settings, setSettings] = useState({
@@ -47,6 +70,7 @@ export default function AnimatePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
+    setVideoHistory(loadVideoHistory());
     voiceAPI.getPresets()
       .then((res) => {
         if (res.data?.data?.presets) {
@@ -83,9 +107,21 @@ export default function AnimatePage() {
       });
       const data = response.data;
       if (data.success && data.data?.video_url) {
-        setVideoUrl(`${API_BASE}${data.data.video_url}`);
+        const fullUrl = `${API_BASE}${data.data.video_url}`;
+        setVideoUrl(fullUrl);
         setVideoMeta(data.data);
         setStage('preview');
+        // Persist to history
+        const newItem: VideoHistoryItem = {
+          url: fullUrl,
+          prompt: prompt.trim(),
+          filename: data.data.filename || 'animation.mp4',
+          duration: data.data.duration ? `${data.data.duration}s` : '',
+          createdAt: new Date().toISOString(),
+        };
+        const updated = [newItem, ...loadVideoHistory()];
+        saveVideoHistory(updated);
+        setVideoHistory(updated);
       } else {
         setError(data.message || 'Failed to generate animation');
         setStage('input');
@@ -97,7 +133,6 @@ export default function AnimatePage() {
     }
   };
 
-  const handleReset = () => { setStage('input'); setVideoUrl(null); setVideoMeta(null); setError(null); setPrompt(''); };
   const handleNewVideo = () => { setStage('input'); setVideoUrl(null); setVideoMeta(null); setError(null); };
   const handleDownload = () => {
     if (!videoUrl) return;
@@ -312,6 +347,36 @@ export default function AnimatePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Video History */}
+      {videoHistory.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-10">
+          <h3 className="font-label text-[10px] uppercase tracking-widest text-muted mb-4">Recent Videos</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {videoHistory.map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                className="group bg-surface border border-border rounded-lg overflow-hidden hover:border-primary transition-all cursor-pointer"
+                onClick={() => { setVideoUrl(item.url); setStage('preview'); }}
+              >
+                <div className="aspect-video bg-void-black flex items-center justify-center relative">
+                  <video src={item.url} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" muted />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Film className="h-6 w-6 text-white opacity-60 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+                <div className="p-2">
+                  <p className="text-xs text-foreground line-clamp-1">{item.prompt}</p>
+                  <p className="text-[10px] text-muted font-label mt-0.5">{item.duration} · {new Date(item.createdAt).toLocaleDateString()}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

@@ -15,8 +15,9 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-OUTPUT_DIR = "uploads/output/videos"
-IMAGE_OUTPUT_DIR = "uploads/output/images"
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUTPUT_DIR = os.path.join(_BACKEND_DIR, "uploads", "output", "videos")
+IMAGE_OUTPUT_DIR = os.path.join(_BACKEND_DIR, "uploads", "output", "images")
 
 
 def _get_api_key():

@@ -19,8 +19,9 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
-OUTPUT_DIR = "uploads/output/animations"
-TEMP_DIR = "uploads/output/temp"
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUTPUT_DIR = os.path.join(_BACKEND_DIR, "uploads", "output", "animations")
+TEMP_DIR = os.path.join(_BACKEND_DIR, "uploads", "output", "temp")
 
 
 def ensure_dirs():

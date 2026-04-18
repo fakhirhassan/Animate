@@ -1,8 +1,6 @@
 'use client';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
-const IMAGE_HISTORY_KEY = 'mesh_image_history';
-const MAX_HISTORY = 24;
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -43,15 +41,10 @@ export default function TextToImagePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [resolution, setResolution] = useState(RESOLUTIONS[0]);
   const [steps, setSteps] = useState(25);
-  const [imageHistory, setImageHistory] = useState<Array<{ url: string; prompt: string; createdAt: string }>>([]);
+  const [imageHistory, setImageHistory] = useState<Array<{ url: string; prompt: string }>>([]);
 
   useEffect(() => {
     checkAvailability();
-    // Load persisted history
-    try {
-      const saved = JSON.parse(localStorage.getItem(IMAGE_HISTORY_KEY) || '[]');
-      setImageHistory(saved);
-    } catch {}
   }, []);
 
   const checkAvailability = async () => {
@@ -88,12 +81,7 @@ export default function TextToImagePage() {
       if (result?.image_url) {
         const fullUrl = `${BACKEND_URL}${result.image_url}`;
         setGeneratedImage(fullUrl);
-        const newItem = { url: fullUrl, prompt: prompt.trim(), createdAt: new Date().toISOString() };
-        setImageHistory(prev => {
-          const updated = [newItem, ...prev].slice(0, MAX_HISTORY);
-          localStorage.setItem(IMAGE_HISTORY_KEY, JSON.stringify(updated));
-          return updated;
-        });
+        setImageHistory(prev => [{ url: fullUrl, prompt: prompt.trim() }, ...prev].slice(0, 12));
       } else {
         setError('No image returned from server');
       }
@@ -299,19 +287,15 @@ export default function TextToImagePage() {
             {/* History */}
             {imageHistory.length > 0 && (
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
-                <h3 className="text-sm font-medium text-gray-300 mb-3">Recent Generations ({imageHistory.length})</h3>
+                <h3 className="text-sm font-medium text-gray-300 mb-3">Recent Generations</h3>
                 <div className="grid grid-cols-3 gap-3">
                   {imageHistory.map((item, i) => (
                     <button
                       key={i}
-                      onClick={() => { setGeneratedImage(item.url); setPrompt(item.prompt); }}
-                      className="group aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-purple-500/50 transition-colors relative"
-                      title={item.prompt}
+                      onClick={() => setGeneratedImage(item.url)}
+                      className="aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-purple-500/50 transition-colors"
                     >
                       <img src={item.url} alt={item.prompt} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-1.5">
-                        <p className="text-white text-[9px] line-clamp-2 leading-tight">{item.prompt}</p>
-                      </div>
                     </button>
                   ))}
                 </div>
