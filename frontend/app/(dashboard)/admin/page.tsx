@@ -57,7 +57,11 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/authStore';
 import { adminAPI } from '@/lib/api';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, AreaChart, Area, RadialBarChart, RadialBar,
+} from 'recharts';
+import { Trophy, Clock, Target, Award, TrendingDown, Sparkles } from 'lucide-react';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -75,6 +79,18 @@ export default function AdminDashboard() {
   const [userGrowthData, setUserGrowthData] = useState<any[]>([]);
   const [conversionData, setConversionData] = useState<any[]>([]);
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [roleDistribution, setRoleDistribution] = useState<any[]>([]);
+  const [conversionStatus, setConversionStatus] = useState<any[]>([]);
+  const [topCreators, setTopCreators] = useState<any[]>([]);
+  const [heatmapData, setHeatmapData] = useState<any[]>([]);
+  const [overview, setOverview] = useState<any>({
+    newUsersWeek: 0,
+    newUsersChange: 0,
+    conversionsWeek: 0,
+    conversionsChange: 0,
+    successRate: 0,
+    totalConversions: 0,
+  });
 
   // CRUD state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -148,6 +164,20 @@ export default function AdminDashboard() {
       console.log('🎬 Conversion activity response:', activityResponse.data);
       setConversionData(activityResponse.data.data || []);
 
+      // Analytics extras (all parallel)
+      const [roleRes, statusRes, topRes, heatRes, overviewRes] = await Promise.all([
+        adminAPI.getRoleDistribution().catch(() => ({ data: { data: [] } })),
+        adminAPI.getConversionStatus().catch(() => ({ data: { data: [] } })),
+        adminAPI.getTopCreators(5).catch(() => ({ data: { data: [] } })),
+        adminAPI.getHeatmap(7).catch(() => ({ data: { data: [] } })),
+        adminAPI.getOverview().catch(() => ({ data: { data: {} } })),
+      ]);
+      setRoleDistribution(roleRes.data?.data || []);
+      setConversionStatus(statusRes.data?.data || []);
+      setTopCreators(topRes.data?.data || []);
+      setHeatmapData(heatRes.data?.data || []);
+      if (overviewRes.data?.data) setOverview({ ...overview, ...overviewRes.data.data });
+
       // Fetch recent activities
       const activitiesResponse = await adminAPI.getRecentActivities(10);
       console.log('⚡ Recent activities response:', activitiesResponse.data);
@@ -170,44 +200,66 @@ export default function AdminDashboard() {
     }
   };
 
+  const fmtChange = (n: number) => `${n >= 0 ? '+' : ''}${n}%`;
+
   const statsCards = [
     {
       title: 'Total Users',
       value: stats.totalUsers.toLocaleString(),
       icon: Users,
       iconColor: 'text-primary',
-      bgColor: 'from-blue-500/20 to-emerald-500/20',
-      change: '+12%',
-      changeType: 'positive',
+      change: fmtChange(overview.newUsersChange || 0),
+      changeType: (overview.newUsersChange || 0) >= 0 ? 'positive' : 'negative',
+      sub: `${overview.newUsersWeek || 0} new this week`,
     },
     {
       title: 'Active Users',
       value: stats.activeUsers.toLocaleString(),
       icon: UserCheck,
       iconColor: 'text-accent',
-      bgColor: 'from-blue-500/20 to-emerald-500/20',
-      change: '+8%',
+      change: `${stats.totalUsers ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}%`,
       changeType: 'positive',
+      sub: 'of total user base',
     },
     {
       title: 'Total Projects',
       value: stats.totalProjects.toLocaleString(),
       icon: Video,
       iconColor: 'text-primary',
-      bgColor: 'from-blue-500/20 to-emerald-500/20',
-      change: '+23%',
-      changeType: 'positive',
+      change: fmtChange(overview.conversionsChange || 0),
+      changeType: (overview.conversionsChange || 0) >= 0 ? 'positive' : 'negative',
+      sub: `${overview.conversionsWeek || 0} this week`,
     },
     {
-      title: 'System Health',
-      value: `${stats.systemHealth}%`,
-      icon: Activity,
+      title: 'Success Rate',
+      value: `${overview.successRate || 0}%`,
+      icon: Target,
       iconColor: 'text-accent',
-      bgColor: 'from-blue-500/20 to-emerald-500/20',
-      change: '+2%',
+      change: `${overview.totalConversions || 0}`,
       changeType: 'positive',
+      sub: 'total conversions',
     },
   ];
+
+  const ROLE_COLORS = ['#6D28D9', '#10F0B0'];
+  const STATUS_COLORS: Record<string, string> = {
+    Completed: '#10F0B0',
+    Processing: '#F59E0B',
+    Failed: '#EF4444',
+    Pending: '#6366F1',
+    Unknown: '#6B7280',
+  };
+
+  const maxHeat = Math.max(1, ...heatmapData.map((d: any) => d.value || 0));
+  const daysOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const heatCellColor = (v: number) => {
+    if (v === 0) return 'bg-surface-high border-border';
+    const intensity = v / maxHeat;
+    if (intensity > 0.75) return 'bg-primary border-primary/50';
+    if (intensity > 0.5) return 'bg-primary/70 border-primary/40';
+    if (intensity > 0.25) return 'bg-primary/40 border-primary/30';
+    return 'bg-primary/20 border-primary/20';
+  };
 
   const filteredUsers = users.filter(
     (user) =>
@@ -379,10 +431,20 @@ export default function AdminDashboard() {
                     <p className="font-label text-[10px] uppercase tracking-widest text-muted">{stat.title}</p>
                     <div className="flex items-end justify-between">
                       <p className="text-3xl font-headline font-bold text-accent">{stat.value}</p>
-                      <span className="text-xs font-label text-accent bg-accent/10 px-2 py-1 rounded">
+                      <span className={`text-xs font-label px-2 py-1 rounded flex items-center gap-1 ${
+                        stat.changeType === 'positive'
+                          ? 'text-accent bg-accent/10'
+                          : 'text-destructive bg-destructive/10'
+                      }`}>
+                        {stat.changeType === 'positive'
+                          ? <TrendingUp className="h-3 w-3" />
+                          : <TrendingDown className="h-3 w-3" />}
                         {stat.change}
                       </span>
                     </div>
+                    {(stat as any).sub && (
+                      <p className="text-xs text-muted mt-1">{(stat as any).sub}</p>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -409,26 +471,34 @@ export default function AdminDashboard() {
                 <BarChart3 className="h-6 w-6 text-primary" />
               </div>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={userGrowthData}>
+                <AreaChart data={userGrowthData}>
+                  <defs>
+                    <linearGradient id="userGrowthFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6D28D9" stopOpacity={0.6} />
+                      <stop offset="100%" stopColor="#6D28D9" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="month" stroke="#9ca3af" />
-                  <YAxis stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" allowDecimals={false} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'var(--surface)',
                       border: '1px solid var(--border)',
                       borderRadius: '8px',
-                      color: 'var(--foreground)'
+                      color: 'var(--foreground)',
                     }}
                   />
-                  <Line
+                  <Area
                     type="monotone"
                     dataKey="users"
                     stroke="#6D28D9"
                     strokeWidth={3}
-                    dot={{ fill: '#10F0B0', r: 6 }}
+                    fill="url(#userGrowthFill)"
+                    dot={{ fill: '#10F0B0', r: 5, strokeWidth: 2, stroke: '#6D28D9' }}
+                    activeDot={{ r: 7 }}
                   />
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </motion.div>
 
@@ -581,6 +651,212 @@ export default function AdminDashboard() {
             </motion.div>
           </div>
         </div>
+
+        {/* Advanced Analytics Row 1: Donuts + Leaderboard */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+          {/* Role Distribution Donut */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="bg-surface border border-border rounded-lg bloom-shadow p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-headline font-bold text-foreground uppercase tracking-tight">User Roles</h3>
+                <p className="text-muted text-xs">Distribution by access level</p>
+              </div>
+              <Shield className="h-5 w-5 text-primary" />
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={roleDistribution}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {roleDistribution.map((_, idx) => (
+                    <Cell key={idx} fill={ROLE_COLORS[idx % ROLE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    color: 'var(--foreground)',
+                  }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {roleDistribution.map((r: any, i: number) => (
+                <div key={i} className="bg-surface-high rounded-lg p-3 border border-border">
+                  <p className="text-[10px] uppercase tracking-widest text-muted">{r.name}</p>
+                  <p className="text-xl font-bold text-foreground">{r.value}</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Conversion Status Donut */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-surface border border-border rounded-lg bloom-shadow p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-headline font-bold text-foreground uppercase tracking-tight">Conversion Status</h3>
+                <p className="text-muted text-xs">Success vs processing vs failed</p>
+              </div>
+              <Sparkles className="h-5 w-5 text-accent" />
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={conversionStatus}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={3}
+                  dataKey="value"
+                >
+                  {conversionStatus.map((entry: any, idx: number) => (
+                    <Cell key={idx} fill={STATUS_COLORS[entry.name] || '#6B7280'} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    color: 'var(--foreground)',
+                  }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="bg-surface-high rounded-lg p-3 border border-border mt-2 text-center">
+              <p className="text-[10px] uppercase tracking-widest text-muted">Overall Success Rate</p>
+              <p className="text-2xl font-bold text-accent">{overview.successRate || 0}%</p>
+            </div>
+          </motion.div>
+
+          {/* Top Creators Leaderboard */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+            className="bg-surface border border-border rounded-lg bloom-shadow p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-headline font-bold text-foreground uppercase tracking-tight">Top Creators</h3>
+                <p className="text-muted text-xs">By project count</p>
+              </div>
+              <Trophy className="h-5 w-5 text-highlight" />
+            </div>
+            <div className="space-y-3">
+              {topCreators.length === 0 && (
+                <p className="text-sm text-muted text-center py-8">No activity yet</p>
+              )}
+              {topCreators.map((creator: any, idx: number) => (
+                <div
+                  key={creator.id}
+                  className="flex items-center gap-3 p-3 bg-surface-high rounded-lg border border-border hover:border-primary/40 transition-all"
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                    idx === 0 ? 'bg-yellow-500/20 text-yellow-500' :
+                    idx === 1 ? 'bg-gray-400/20 text-gray-400' :
+                    idx === 2 ? 'bg-orange-600/20 text-orange-500' :
+                    'bg-primary/10 text-primary'
+                  }`}>
+                    {idx < 3 ? <Award className="h-4 w-4" /> : `#${idx + 1}`}
+                  </div>
+                  <Avatar className="h-9 w-9 border border-border">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                      {creator.name.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{creator.name}</p>
+                    <p className="text-xs text-muted truncate">{creator.email}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-accent">{creator.count}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-muted">projects</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Advanced Analytics Row 2: Activity Heatmap */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-surface border border-border rounded-lg bloom-shadow p-8 mb-12"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-headline font-bold text-foreground uppercase tracking-tight mb-1">Activity Heatmap</h3>
+              <p className="text-muted text-sm">Conversions by day & hour (last 7 days)</p>
+            </div>
+            <Clock className="h-6 w-6 text-primary" />
+          </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[720px]">
+              {/* Hour labels */}
+              <div className="flex gap-1 mb-2 ml-12">
+                {Array.from({ length: 24 }).map((_, h) => (
+                  <div
+                    key={h}
+                    className="flex-1 text-center text-[9px] text-muted font-label"
+                    style={{ minWidth: 22 }}
+                  >
+                    {h % 3 === 0 ? `${h}h` : ''}
+                  </div>
+                ))}
+              </div>
+              {daysOrder.map((day) => (
+                <div key={day} className="flex items-center gap-1 mb-1">
+                  <div className="w-10 text-xs text-muted font-label uppercase">{day}</div>
+                  {Array.from({ length: 24 }).map((_, h) => {
+                    const cell = heatmapData.find((d: any) => d.day === day && d.hour === h);
+                    const v = cell?.value || 0;
+                    return (
+                      <div
+                        key={h}
+                        title={`${day} ${h}:00 — ${v} conversion${v === 1 ? '' : 's'}`}
+                        className={`flex-1 h-6 rounded border transition-all hover:scale-110 cursor-pointer ${heatCellColor(v)}`}
+                        style={{ minWidth: 22 }}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 mt-4 text-xs text-muted">
+            <span>Less</span>
+            <div className="w-4 h-4 rounded bg-surface-high border border-border" />
+            <div className="w-4 h-4 rounded bg-primary/20 border border-primary/20" />
+            <div className="w-4 h-4 rounded bg-primary/40 border border-primary/30" />
+            <div className="w-4 h-4 rounded bg-primary/70 border border-primary/40" />
+            <div className="w-4 h-4 rounded bg-primary border border-primary/50" />
+            <span>More</span>
+          </div>
+        </motion.div>
 
         {/* Users Table */}
         <motion.div

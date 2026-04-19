@@ -290,23 +290,23 @@ class AdminStatsService:
                     'data': {'users': [], 'total': 0}
                 }
 
+            # Batch-fetch all conversions once, then tally per user
+            all_conv = self.supabase.table('conversions').select('user_id').execute()
+            project_counts: Dict[str, int] = {}
+            for row in (all_conv.data or []):
+                uid = row.get('user_id')
+                if uid:
+                    project_counts[uid] = project_counts.get(uid, 0) + 1
+
             users_with_stats = []
             for user in users_response.data:
-                # Get conversion count for each user
-                conversions_response = self.supabase.table('conversions')\
-                    .select('id', count='exact')\
-                    .eq('user_id', user['id'])\
-                    .execute()
-
-                project_count = len(conversions_response.data) if conversions_response.data else 0
-
                 users_with_stats.append({
                     'id': user['id'],
                     'name': user['name'],
                     'email': user['email'],
                     'role': user['role'],
                     'status': 'active' if user.get('is_active', True) else 'inactive',
-                    'projects': project_count,
+                    'projects': project_counts.get(user['id'], 0),
                     'joinedAt': self._format_date(user.get('created_at'))
                 })
 
@@ -337,3 +337,142 @@ class AdminStatsService:
             return timestamp.strftime('%Y-%m-%d')
         except:
             return 'N/A'
+
+    def get_role_distribution(self) -> Dict[str, Any]:
+        """Count users by role for donut chart."""
+        try:
+            res = self.supabase.table('users').select('role').execute()
+            counts = {'admin': 0, 'creator': 0}
+            for row in (res.data or []):
+                r = row.get('role') or 'creator'
+                counts[r] = counts.get(r, 0) + 1
+            data = [{'name': k.capitalize(), 'value': v} for k, v in counts.items()]
+            return {'success': True, 'data': data}
+        except Exception as e:
+            logger.error(f'Error fetching role distribution: {e}')
+            return {'success': False, 'data': [], 'message': str(e)}
+
+    def get_conversion_status_breakdown(self) -> Dict[str, Any]:
+        """Count conversions by status for donut chart."""
+        try:
+            res = self.supabase.table('conversions').select('status').execute()
+            counts = {}
+            for row in (res.data or []):
+                s = (row.get('status') or 'unknown').lower()
+                counts[s] = counts.get(s, 0) + 1
+            data = [{'name': k.capitalize(), 'value': v} for k, v in counts.items()]
+            return {'success': True, 'data': data}
+        except Exception as e:
+            logger.error(f'Error fetching conversion status: {e}')
+            return {'success': False, 'data': [], 'message': str(e)}
+
+    def get_top_creators(self, limit: int = 5) -> Dict[str, Any]:
+        """Top users by conversion count — single batch query, no N+1."""
+        try:
+            # One query: all conversions with embedded user info
+            conv_res = self.supabase.table('conversions')\
+                .select('user_id, users(id, name, email)')\
+                .execute()
+
+            tally: Dict[str, Dict[str, Any]] = {}
+            for row in (conv_res.data or []):
+                uid = row.get('user_id')
+                if not uid:
+                    continue
+                user = row.get('users') or {}
+                if uid not in tally:
+                    tally[uid] = {
+                        'id': uid,
+                        'name': user.get('name') or 'Unknown',
+                        'email': user.get('email') or '',
+                        'count': 0,
+                    }
+                tally[uid]['count'] += 1
+
+            ranked = sorted(tally.values(), key=lambda x: x['count'], reverse=True)
+            return {'success': True, 'data': ranked[:limit]}
+        except Exception as e:
+            logger.error(f'Error fetching top creators: {e}')
+            return {'success': False, 'data': [], 'message': str(e)}
+
+    def get_hourly_heatmap(self, days: int = 7) -> Dict[str, Any]:
+        """Activity heatmap by day-of-week × hour-of-day for last N days."""
+        try:
+            since = (datetime.now() - timedelta(days=days)).isoformat()
+            res = self.supabase.table('conversions')\
+                .select('created_at')\
+                .gte('created_at', since)\
+                .execute()
+
+            day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            grid = {d: {h: 0 for h in range(24)} for d in day_names}
+
+            for row in (res.data or []):
+                ts = row.get('created_at')
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                    dname = day_names[dt.weekday()]
+                    grid[dname][dt.hour] += 1
+                except Exception:
+                    continue
+
+            data = []
+            for d in day_names:
+                for h in range(24):
+                    data.append({'day': d, 'hour': h, 'value': grid[d][h]})
+            return {'success': True, 'data': data}
+        except Exception as e:
+            logger.error(f'Error fetching heatmap: {e}')
+            return {'success': False, 'data': [], 'message': str(e)}
+
+    def get_overview_metrics(self) -> Dict[str, Any]:
+        """Period-over-period comparison for KPI cards."""
+        try:
+            now = datetime.now()
+            week_ago = (now - timedelta(days=7)).isoformat()
+            two_weeks_ago = (now - timedelta(days=14)).isoformat()
+
+            # Users this week vs last week
+            users_this = self.supabase.table('users').select('id', count='exact')\
+                .gte('created_at', week_ago).execute()
+            users_last = self.supabase.table('users').select('id', count='exact')\
+                .gte('created_at', two_weeks_ago).lt('created_at', week_ago).execute()
+
+            # Conversions this week vs last week
+            conv_this = self.supabase.table('conversions').select('id', count='exact')\
+                .gte('created_at', week_ago).execute()
+            conv_last = self.supabase.table('conversions').select('id', count='exact')\
+                .gte('created_at', two_weeks_ago).lt('created_at', week_ago).execute()
+
+            # Success rate
+            all_conv = self.supabase.table('conversions').select('status').execute()
+            total = len(all_conv.data or [])
+            completed = sum(1 for r in (all_conv.data or []) if (r.get('status') or '').lower() == 'completed')
+            success_rate = round((completed / total) * 100, 1) if total > 0 else 0
+
+            def pct_change(cur, prev):
+                if prev == 0:
+                    return 100 if cur > 0 else 0
+                return round(((cur - prev) / prev) * 100, 1)
+
+            uc = len(users_this.data or [])
+            ul = len(users_last.data or [])
+            cc = len(conv_this.data or [])
+            cl = len(conv_last.data or [])
+
+            return {
+                'success': True,
+                'data': {
+                    'newUsersWeek': uc,
+                    'newUsersChange': pct_change(uc, ul),
+                    'conversionsWeek': cc,
+                    'conversionsChange': pct_change(cc, cl),
+                    'successRate': success_rate,
+                    'totalConversions': total,
+                }
+            }
+        except Exception as e:
+            logger.error(f'Error fetching overview metrics: {e}')
+            return {'success': False, 'data': {}, 'message': str(e)}

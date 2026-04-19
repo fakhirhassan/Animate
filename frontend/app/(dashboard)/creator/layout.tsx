@@ -65,7 +65,6 @@ const navItems = [
     href: '/creator/settings',
     icon: Settings,
     description: 'Account preferences',
-    disabled: true,
   },
 ];
 

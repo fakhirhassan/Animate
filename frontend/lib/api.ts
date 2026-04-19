@@ -132,6 +132,15 @@ export const authAPI = {
 
   verifyOtp: (data: { email: string; token: string; name?: string }) =>
     api.post('/auth/verify-otp', data),
+
+  updateProfile: (data: { name: string }) =>
+    api.patch('/auth/update-profile', data),
+
+  changePassword: (data: { old_password: string; new_password: string; confirm_password: string }) =>
+    api.post('/auth/change-password', data),
+
+  deleteAccount: (data: { password: string }) =>
+    api.delete('/auth/delete-account', { data }),
 };
 
 // Projects API
@@ -170,6 +179,18 @@ export const adminAPI = {
 
   getRecentActivities: (limit?: number) =>
     api.get('/admin/activities', { params: { limit } }),
+
+  getRoleDistribution: () => api.get('/admin/analytics/role-distribution'),
+
+  getConversionStatus: () => api.get('/admin/analytics/conversion-status'),
+
+  getTopCreators: (limit?: number) =>
+    api.get('/admin/analytics/top-creators', { params: { limit } }),
+
+  getHeatmap: (days?: number) =>
+    api.get('/admin/analytics/heatmap', { params: { days } }),
+
+  getOverview: () => api.get('/admin/analytics/overview'),
 };
 
 // Conversion API (2D to 3D)

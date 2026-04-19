@@ -578,3 +578,128 @@ def reset_password():
         if 'Invalid' in str(e) or 'expired' in str(e):
             return error_response('Invalid or expired reset token', 400)
         return error_response('Failed to reset password', 500)
+
+
+@bp.route('/update-profile', methods=['PATCH'])
+def update_profile():
+    """Update authenticated user's profile (name only)."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return error_response('Authorization header required', 401)
+        token = auth_header.split(' ')[1]
+
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip()
+        if not name or len(name) < 2:
+            return error_response('Name must be at least 2 characters', 400)
+
+        supabase = get_supabase()
+        user_response = supabase.auth.get_user(token)
+        user_data = user_response.user
+        if not user_data:
+            return error_response('Invalid or expired token', 401)
+
+        supabase.table('users').update({'name': name}).eq('id', user_data.id).execute()
+        return success_response({'name': name}, 'Profile updated')
+
+    except Exception as e:
+        logger.error(f'Update profile error: {str(e)}')
+        return error_response('Failed to update profile', 500)
+
+
+@bp.route('/change-password', methods=['POST'])
+def change_password():
+    """Change password — requires old password, new password, and confirmation."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return error_response('Authorization header required', 401)
+        token = auth_header.split(' ')[1]
+
+        data = request.get_json() or {}
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+        confirm_password = data.get('confirm_password')
+
+        if not all([old_password, new_password, confirm_password]):
+            return error_response('All password fields are required', 400)
+        if new_password != confirm_password:
+            return error_response('New passwords do not match', 400)
+        if len(new_password) < 6:
+            return error_response('New password must be at least 6 characters', 400)
+        if old_password == new_password:
+            return error_response('New password must be different from old password', 400)
+
+        supabase = get_supabase()
+        user_response = supabase.auth.get_user(token)
+        user_data = user_response.user
+        if not user_data:
+            return error_response('Invalid or expired token', 401)
+
+        # Verify old password by attempting to sign in
+        try:
+            supabase.auth.sign_in_with_password({'email': user_data.email, 'password': old_password})
+        except Exception:
+            return error_response('Current password is incorrect', 400)
+
+        # Update password via admin API (service role key from env)
+        import os
+        from supabase import create_client
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv('SUPABASE_URL')
+        if not service_key or not url:
+            return error_response('Server not configured for password change', 500)
+
+        admin_client = create_client(url, service_key)
+        admin_client.auth.admin.update_user_by_id(user_data.id, {'password': new_password})
+        return success_response(None, 'Password changed successfully')
+
+    except Exception as e:
+        logger.error(f'Change password error: {str(e)}')
+        return error_response('Failed to change password', 500)
+
+
+@bp.route('/delete-account', methods=['DELETE'])
+def delete_account():
+    """Permanently delete the authenticated user's account and all their data."""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return error_response('Authorization header required', 401)
+        token = auth_header.split(' ')[1]
+
+        data = request.get_json() or {}
+        password = data.get('password')
+        if not password:
+            return error_response('Password confirmation required', 400)
+
+        supabase = get_supabase()
+        user_response = supabase.auth.get_user(token)
+        user_data = user_response.user
+        if not user_data:
+            return error_response('Invalid or expired token', 401)
+
+        # Verify password
+        try:
+            supabase.auth.sign_in_with_password({'email': user_data.email, 'password': password})
+        except Exception:
+            return error_response('Incorrect password', 400)
+
+        user_id = user_data.id
+
+        # Delete user's data from users table (RLS cascades will handle related tables)
+        import os
+        from supabase import create_client
+        service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        url = os.getenv('SUPABASE_URL')
+        admin_client = create_client(url, service_key)
+
+        admin_client.table('users').delete().eq('id', user_id).execute()
+        admin_client.auth.admin.delete_user(user_id)
+
+        return success_response(None, 'Account deleted successfully')
+
+    except Exception as e:
+        logger.error(f'Delete account error: {str(e)}')
+        return error_response('Failed to delete account', 500)
