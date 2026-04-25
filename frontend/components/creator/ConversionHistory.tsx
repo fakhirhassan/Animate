@@ -24,6 +24,7 @@ export interface ConversionHistoryItem {
   quality: string;
   createdAt: Date;
   fileSize: string;
+  method?: string;
 }
 
 interface ConversionHistoryProps {
@@ -31,6 +32,21 @@ interface ConversionHistoryProps {
   onView: (item: ConversionHistoryItem) => void;
   onDownload: (item: ConversionHistoryItem) => void;
   onDelete: (id: string) => void;
+}
+
+function MethodBadge({ method }: { method: string }) {
+  const m = method.toLowerCase();
+  let label = method;
+  let cls = 'bg-white/10 text-gray-300';
+  if (m.includes('hunyuan')) { label = 'Hunyuan3D'; cls = 'bg-purple-500/25 text-purple-200'; }
+  else if (m.includes('triposr')) { label = 'TripoSR'; cls = 'bg-blue-500/25 text-blue-200'; }
+  else if (m.includes('midas')) { label = 'MiDaS'; cls = 'bg-orange-500/25 text-orange-200'; }
+  else if (m.includes('cloud')) { label = 'Cloud'; cls = 'bg-sky-500/25 text-sky-200'; }
+  return (
+    <span className={`px-2 py-0.5 text-xs rounded-full ${cls}`} title={method}>
+      {label}
+    </span>
+  );
 }
 
 export default function ConversionHistory({
@@ -171,7 +187,7 @@ export default function ConversionHistory({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span
                     className={`
                       px-2 py-0.5 text-xs rounded-full capitalize
@@ -182,6 +198,7 @@ export default function ConversionHistory({
                   >
                     {item.quality} quality
                   </span>
+                  {item.method && <MethodBadge method={item.method} />}
                 </div>
               </div>
 

@@ -29,6 +29,9 @@ def _get_endpoint_id():
 def _get_t2i_endpoint_id():
     return os.getenv("RUNPOD_T2I_ENDPOINT_ID", "")
 
+def _get_3d_endpoint_id():
+    return os.getenv("RUNPOD_3D_ENDPOINT_ID", "") or os.getenv("RUNPOD_ENDPOINT_ID", "")
+
 def _get_gpu_mode():
     return os.getenv("GPU_MODE", "auto")
 
@@ -273,6 +276,76 @@ def generate_image_cloud(
         "resolution": f"{width}x{height}",
         "prompt": prompt,
         "source": "cloud",
+    }
+
+
+def generate_3d_cloud(
+    input_image_path: str,
+    output_path: str,
+    output_format: str = "glb",
+    mc_resolution: int = 256,
+    remove_bg: bool = True,
+) -> Dict[str, Any]:
+    """
+    Generate a textured 3D mesh from a single image using the TRELLIS
+    RunPod endpoint (RUNPOD_3D_ENDPOINT_ID).
+
+    Args:
+        input_image_path: Absolute path to input image.
+        output_path: Output path WITHOUT extension (matches local converter convention).
+        output_format: 'glb' (textured, recommended) or 'obj' (geometry only).
+        mc_resolution: Kept for API compat; TRELLIS uses its own sampler cadence.
+        remove_bg: Whether the worker should strip the background before reconstruction.
+
+    Returns:
+        Dict with success flag, final output_path, format, and mesh metadata.
+    """
+    endpoint = _get_3d_endpoint_id()
+    if not endpoint:
+        raise RuntimeError("RUNPOD_3D_ENDPOINT_ID (or RUNPOD_ENDPOINT_ID) not configured")
+
+    with open(input_image_path, "rb") as f:
+        image_b64 = base64.b64encode(f.read()).decode()
+
+    payload = {
+        "input": {
+            "task": "image_to_3d",
+            "image_base64": image_b64,
+            "output_format": output_format,
+            "remove_bg": remove_bg,
+        }
+    }
+
+    logger.info(
+        f"Cloud 3D (TRELLIS): submitting "
+        f"(endpoint={endpoint[:8]}…, format={output_format})"
+    )
+    result = _runpod_request(endpoint, payload, timeout=900)
+
+    if not isinstance(result, dict) or not result.get("model_base64"):
+        err = result.get("error") if isinstance(result, dict) else str(result)[:200]
+        raise RuntimeError(f"TRELLIS endpoint returned no model payload: {err}")
+
+    model_b64 = result["model_base64"]
+    final_path = f"{output_path}.{output_format}"
+    os.makedirs(os.path.dirname(final_path) or ".", exist_ok=True)
+    with open(final_path, "wb") as f:
+        f.write(base64.b64decode(model_b64))
+
+    logger.info(f"Cloud 3D mesh saved (TRELLIS): {final_path}")
+
+    return {
+        "success": True,
+        "output_path": final_path,
+        "format": output_format,
+        "method": "Cloud 3D (TRELLIS)",
+        "source": "cloud",
+        "metadata": {
+            "vertex_count": result.get("vertex_count", 0),
+            "face_count": result.get("face_count", 0),
+            "textured": result.get("textured", False),
+            "model": "TRELLIS",
+        },
     }
 
 

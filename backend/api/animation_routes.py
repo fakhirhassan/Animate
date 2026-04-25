@@ -53,6 +53,52 @@ def generate_full_animation():
         return error_response(f'Animation generation failed: {e}', 500)
 
 
+@bp.route('/multi-scene', methods=['POST'])
+@login_required
+def generate_multi_scene():
+    """
+    Generate a multi-scene animation from an array of scene descriptions.
+
+    Request Body (JSON):
+        - scenes: List[str] — one scene description per clip (required)
+        - num_frames_per_scene: int (default 81, ~5s @ 16fps)
+        - num_inference_steps: int (default 30)
+        - fps: int (default 16)
+        - voice_preset: str (default af_heart)
+        - narration: str — optional narration spanning the whole video
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return error_response('Request body is required', 400)
+        scenes = data.get('scenes')
+        if not isinstance(scenes, list) or len(scenes) == 0:
+            return error_response('scenes must be a non-empty list', 400)
+        if len(scenes) > 12:
+            return error_response('Maximum 12 scenes per video', 400)
+        scenes = [s.strip() for s in scenes if isinstance(s, str) and s.strip()]
+        if not scenes:
+            return error_response('All scenes are empty', 400)
+
+        from services.animation_pipeline_service import generate_multi_scene_animation
+        result = generate_multi_scene_animation(
+            scenes=scenes,
+            num_frames_per_scene=int(data.get('num_frames_per_scene', 81)),
+            num_inference_steps=int(data.get('num_inference_steps', 30)),
+            fps=int(data.get('fps', 16)),
+            voice_preset=data.get('voice_preset', 'af_heart'),
+            narration=data.get('narration', ''),
+        )
+        return success_response(result, 'Multi-scene animation generated successfully')
+
+    except RuntimeError as e:
+        logger.error(f'Multi-scene runtime error: {e}')
+        return error_response(str(e), 503)
+    except Exception as e:
+        logger.error(f'Multi-scene error: {e}')
+        return error_response(f'Multi-scene generation failed: {e}', 500)
+
+
 @bp.route('/image-animate', methods=['POST'])
 @login_required
 def animate_image_with_voice():

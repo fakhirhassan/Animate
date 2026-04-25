@@ -15,6 +15,9 @@ import {
   ChevronUp,
   Volume2,
   Mic,
+  Plus,
+  X as XIcon,
+  GripVertical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { animationAPI, voiceAPI } from '@/lib/api';
@@ -29,6 +32,18 @@ interface VoicePreset {
   id: string;
   name: string;
   language: string;
+  gender?: 'female' | 'male' | 'neutral';
+}
+
+function inferVoiceGender(preset: VoicePreset): 'female' | 'male' | 'neutral' {
+  if (preset.gender) return preset.gender;
+  const prefix = preset.id.slice(0, 2).toLowerCase();
+  if (prefix === 'af' || prefix === 'bf') return 'female';
+  if (prefix === 'am' || prefix === 'bm') return 'male';
+  const n = preset.name.toLowerCase();
+  if (n.includes('female')) return 'female';
+  if (n.includes('male')) return 'male';
+  return 'neutral';
 }
 
 interface VideoHistoryItem {
@@ -51,8 +66,26 @@ function saveVideoHistory(items: VideoHistoryItem[]) {
   localStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY)));
 }
 
+// Duration presets — each chooses sensible num_clips + frames/clip combos.
+// Wan2.1 caps per-clip around ~81 frames (~5s @ 16fps); longer durations
+// use more clips stitched with crossfades.
+const DURATION_PRESETS = [
+  { seconds: 5,  num_clips: 1, frames_per_clip: 81, label: '5s'  },
+  { seconds: 10, num_clips: 2, frames_per_clip: 81, label: '10s' },
+  { seconds: 20, num_clips: 4, frames_per_clip: 81, label: '20s' },
+  { seconds: 30, num_clips: 6, frames_per_clip: 81, label: '30s' },
+  { seconds: 60, num_clips: 8, frames_per_clip: 120, label: '60s' },
+] as const;
+
+type DurationSeconds = typeof DURATION_PRESETS[number]['seconds'];
+
+type GenMode = 'single' | 'multi';
+
 export default function AnimatePage() {
+  const [mode, setMode] = useState<GenMode>('single');
   const [prompt, setPrompt] = useState('');
+  const [scenes, setScenes] = useState<string[]>(['', '']);
+  const [narration, setNarration] = useState('');
   const [stage, setStage] = useState<Stage>('input');
   const [error, setError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -60,6 +93,7 @@ export default function AnimatePage() {
   const [videoHistory, setVideoHistory] = useState<VideoHistoryItem[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [voicePresets, setVoicePresets] = useState<VoicePreset[]>([]);
+  const [durationSeconds, setDurationSeconds] = useState<DurationSeconds>(20);
   const [settings, setSettings] = useState({
     num_frames_per_segment: 81,
     num_inference_steps: 30,
@@ -67,6 +101,16 @@ export default function AnimatePage() {
     voice_preset: 'af_heart',
     num_clips: 4,
   });
+
+  const applyDurationPreset = (seconds: DurationSeconds) => {
+    const preset = DURATION_PRESETS.find((p) => p.seconds === seconds)!;
+    setDurationSeconds(seconds);
+    setSettings((s) => ({
+      ...s,
+      num_clips: preset.num_clips,
+      num_frames_per_segment: preset.frames_per_clip,
+    }));
+  };
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -90,21 +134,50 @@ export default function AnimatePage() {
   }, []);
 
   const handleGenerate = async () => {
-    if (prompt.trim().length < 10) {
-      setError('Please describe your scene in at least 10 characters');
-      return;
-    }
     setError(null);
+
+    // Validate based on mode
+    if (mode === 'single') {
+      if (prompt.trim().length < 10) {
+        setError('Please describe your scene in at least 10 characters');
+        return;
+      }
+    } else {
+      const nonEmpty = scenes.map((s) => s.trim()).filter((s) => s.length >= 5);
+      if (nonEmpty.length < 2) {
+        setError('Please provide at least 2 scenes (each 5+ characters)');
+        return;
+      }
+    }
+
     setStage('generating');
     try {
-      const response = await animationAPI.generate({
-        text: prompt.trim(),
-        num_frames_per_segment: settings.num_frames_per_segment,
-        num_inference_steps: settings.num_inference_steps,
-        fps: settings.fps,
-        voice_preset: settings.voice_preset,
-        num_clips: settings.num_clips,
-      });
+      const promptForHistory =
+        mode === 'single'
+          ? prompt.trim()
+          : scenes.map((s, i) => `Scene ${i + 1}: ${s.trim()}`).filter((_, i) => scenes[i].trim()).join(' | ');
+
+      let response;
+      if (mode === 'single') {
+        response = await animationAPI.generate({
+          text: prompt.trim(),
+          num_frames_per_segment: settings.num_frames_per_segment,
+          num_inference_steps: settings.num_inference_steps,
+          fps: settings.fps,
+          voice_preset: settings.voice_preset,
+          num_clips: settings.num_clips,
+        });
+      } else {
+        response = await animationAPI.generateMultiScene({
+          scenes: scenes.map((s) => s.trim()).filter((s) => s.length > 0),
+          num_frames_per_scene: settings.num_frames_per_segment,
+          num_inference_steps: settings.num_inference_steps,
+          fps: settings.fps,
+          voice_preset: settings.voice_preset,
+          narration: narration.trim(),
+        });
+      }
+
       const data = response.data;
       if (data.success && data.data?.video_url) {
         const fullUrl = `${API_BASE}${data.data.video_url}`;
@@ -114,7 +187,7 @@ export default function AnimatePage() {
         // Persist to history
         const newItem: VideoHistoryItem = {
           url: fullUrl,
-          prompt: prompt.trim(),
+          prompt: promptForHistory,
           filename: data.data.filename || 'animation.mp4',
           duration: data.data.duration ? `${data.data.duration}s` : '',
           createdAt: new Date().toISOString(),
@@ -131,6 +204,21 @@ export default function AnimatePage() {
       setError(msg);
       setStage('input');
     }
+  };
+
+  // Multi-scene helpers
+  const addScene = () => setScenes((prev) => [...prev, '']);
+  const removeScene = (idx: number) => setScenes((prev) => prev.filter((_, i) => i !== idx));
+  const updateScene = (idx: number, value: string) =>
+    setScenes((prev) => prev.map((s, i) => (i === idx ? value : s)));
+  const moveScene = (idx: number, dir: -1 | 1) => {
+    setScenes((prev) => {
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
   };
 
   const handleNewVideo = () => { setStage('input'); setVideoUrl(null); setVideoMeta(null); setError(null); };
@@ -182,17 +270,172 @@ export default function AnimatePage() {
         {stage === 'input' && (
           <motion.div key="input" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
             <div className="bg-surface border border-border rounded-lg p-6 bloom-shadow">
-              <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="h-5 w-5 text-highlight" />
-                <h2 className="font-headline text-sm font-bold text-foreground uppercase tracking-tight">Describe Your Scene</h2>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-highlight" />
+                  <h2 className="font-headline text-sm font-bold text-foreground uppercase tracking-tight">
+                    {mode === 'single' ? 'Describe Your Scene' : 'Describe Your Scenes'}
+                  </h2>
+                </div>
+                {/* Mode switcher */}
+                <div className="inline-flex bg-surface-high rounded-lg p-0.5 border border-border">
+                  <button
+                    onClick={() => setMode('single')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-label uppercase tracking-widest transition-all ${
+                      mode === 'single' ? 'bg-primary/20 text-primary' : 'text-muted hover:text-foreground'
+                    }`}
+                  >
+                    Single
+                  </button>
+                  <button
+                    onClick={() => setMode('multi')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-label uppercase tracking-widest transition-all ${
+                      mode === 'multi' ? 'bg-primary/20 text-primary' : 'text-muted hover:text-foreground'
+                    }`}
+                  >
+                    Multi-Scene
+                  </button>
+                </div>
               </div>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate(); }}
-                placeholder="A cat walking through a sunlit garden, looking around curiously. The cat says 'What a beautiful day!' with a happy expression."
-                className="w-full h-40 bg-input border border-border rounded-lg p-4 text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-              />
+
+              {mode === 'single' ? (
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate(); }}
+                  placeholder="A cat walking through a sunlit garden, looking around curiously. The cat says 'What a beautiful day!' with a happy expression."
+                  className="w-full h-40 bg-input border border-border rounded-lg p-4 text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                />
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted font-label">
+                    Each scene becomes its own clip. Characters from Scene 1 keep the same look across all scenes.
+                  </p>
+                  {scenes.map((scene, idx) => (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <div className="flex flex-col items-center pt-2 gap-1">
+                        <span className="text-[10px] font-label text-muted uppercase tracking-widest">#{idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => moveScene(idx, -1)}
+                          disabled={idx === 0}
+                          className="text-muted hover:text-foreground disabled:opacity-20 transition-colors"
+                          title="Move up"
+                        >
+                          <ChevronUp className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveScene(idx, 1)}
+                          disabled={idx === scenes.length - 1}
+                          className="text-muted hover:text-foreground disabled:opacity-20 transition-colors"
+                          title="Move down"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <textarea
+                        value={scene}
+                        onChange={(e) => updateScene(idx, e.target.value)}
+                        placeholder={
+                          idx === 0
+                            ? "Scene 1: establish the main character (e.g. 'A young woman in a red coat walks through a snowy forest')"
+                            : `Scene ${idx + 1}: what happens next`
+                        }
+                        className="flex-1 h-20 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeScene(idx)}
+                        disabled={scenes.length <= 1}
+                        className="mt-2 text-muted hover:text-destructive disabled:opacity-20 transition-colors"
+                        title="Remove scene"
+                      >
+                        <XIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addScene}
+                    disabled={scenes.length >= 12}
+                    className="flex items-center gap-2 px-3 py-2 text-xs font-label uppercase tracking-widest text-muted hover:text-foreground disabled:opacity-30 transition-colors"
+                  >
+                    <Plus className="h-3 w-3" /> Add Scene {scenes.length >= 12 && '(max 12)'}
+                  </button>
+
+                  <div className="pt-2 border-t border-border/50">
+                    <label className="font-label text-[10px] text-muted uppercase tracking-widest block mb-1.5">
+                      Narration (optional) &mdash; one voiceover for the whole video
+                    </label>
+                    <textarea
+                      value={narration}
+                      onChange={(e) => setNarration(e.target.value)}
+                      placeholder="Leave empty for no voiceover, or write what the narrator should say across all scenes."
+                      className="w-full h-16 bg-input border border-border rounded-lg p-3 text-sm text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Duration selector — primary control */}
+              <div className="mt-4">
+                <label className="font-label text-[10px] text-muted uppercase tracking-widest block mb-2">
+                  {mode === 'single' ? 'Duration' : 'Length Per Scene'}
+                </label>
+                {mode === 'single' ? (
+                  <div className="flex gap-2 flex-wrap">
+                    {DURATION_PRESETS.map((preset) => {
+                      const active = durationSeconds === preset.seconds;
+                      return (
+                        <button
+                          key={preset.seconds}
+                          onClick={() => applyDurationPreset(preset.seconds)}
+                          className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                            active
+                              ? 'bg-primary/20 border border-primary/50 text-primary'
+                              : 'bg-surface-high border border-border text-muted hover:border-primary/30'
+                          }`}
+                        >
+                          {preset.label}
+                          <span className="block text-[9px] font-label text-muted/60 mt-0.5">
+                            {preset.num_clips} clip{preset.num_clips !== 1 ? 's' : ''}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex gap-2 flex-wrap">
+                    {[
+                      { frames: 41, label: '~2.5s' },
+                      { frames: 65, label: '~4s' },
+                      { frames: 81, label: '~5s' },
+                      { frames: 120, label: '~7.5s' },
+                    ].map((opt) => {
+                      const active = settings.num_frames_per_segment === opt.frames;
+                      return (
+                        <button
+                          key={opt.frames}
+                          onClick={() => setSettings((s) => ({ ...s, num_frames_per_segment: opt.frames }))}
+                          className={`px-4 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
+                            active
+                              ? 'bg-primary/20 border border-primary/50 text-primary'
+                              : 'bg-surface-high border border-border text-muted hover:border-primary/30'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-[10px] text-muted/50 font-label mt-2">
+                  {mode === 'single'
+                    ? 'Longer videos = more clips stitched with crossfades. 30s+ takes noticeably longer to generate.'
+                    : `Total video ≈ ${(settings.num_frames_per_segment / settings.fps * scenes.filter((s) => s.trim()).length).toFixed(1)}s across ${scenes.filter((s) => s.trim()).length} scenes.`}
+                </p>
+              </div>
 
               {/* Settings Toggle */}
               <div className="mt-3">
@@ -209,32 +452,57 @@ export default function AnimatePage() {
                   {showSettings && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
-                        <SettingInput label="Frames/Clip" value={settings.num_frames_per_segment} onChange={(v) => setSettings({ ...settings, num_frames_per_segment: v })} min={17} max={81} step={8} hint={`~${(settings.num_frames_per_segment / settings.fps).toFixed(1)}s each`} />
-                        <SettingInput label="Number of Clips" value={settings.num_clips} onChange={(v) => setSettings({ ...settings, num_clips: v })} min={1} max={8} hint={`~${estimatedDuration.toFixed(0)}s total`} />
+                        <SettingInput label="Frames/Clip" value={settings.num_frames_per_segment} onChange={(v) => setSettings({ ...settings, num_frames_per_segment: v })} min={17} max={120} step={8} hint={`~${(settings.num_frames_per_segment / settings.fps).toFixed(1)}s each`} />
+                        <SettingInput label="Number of Clips" value={settings.num_clips} onChange={(v) => setSettings({ ...settings, num_clips: v })} min={1} max={12} hint={`~${estimatedDuration.toFixed(0)}s total`} />
                         <SettingInput label="Quality Steps" value={settings.num_inference_steps} onChange={(v) => setSettings({ ...settings, num_inference_steps: v })} min={10} max={50} />
                       </div>
+                      <p className="text-[10px] text-muted/50 font-label mt-2">
+                        Fine-tune overrides the duration preset above.
+                      </p>
 
                       <div className="mt-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Mic className="h-3.5 w-3.5 text-muted" />
-                          <label className="font-label text-[10px] text-muted uppercase tracking-widest">Voice</label>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <Mic className="h-3.5 w-3.5 text-muted" />
+                            <label className="font-label text-[10px] text-muted uppercase tracking-widest">Voice</label>
+                          </div>
+                          {(() => {
+                            const current = voicePresets.find((v) => v.id === settings.voice_preset);
+                            const g = current ? inferVoiceGender(current) : 'neutral';
+                            if (g === 'neutral') return null;
+                            return (
+                              <span className="text-[10px] font-label text-muted/70 normal-case">
+                                Character will be rendered as {g === 'female' ? 'a woman' : 'a man'} to match the voice
+                              </span>
+                            );
+                          })()}
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                          {voicePresets.map((preset) => (
-                            <button
-                              key={preset.id}
-                              onClick={() => setSettings({ ...settings, voice_preset: preset.id })}
-                              className={`px-3 py-2 rounded-lg text-xs text-left transition-all duration-200 ${
-                                settings.voice_preset === preset.id
-                                  ? 'bg-primary/20 border border-primary/50 text-primary'
-                                  : 'bg-surface-high border border-border text-muted hover:border-primary/30'
-                              }`}
-                            >
-                              <span className="block font-medium">{preset.name}</span>
-                              <span className="text-[10px] font-label text-muted/50">{preset.language}</span>
-                            </button>
-                          ))}
-                        </div>
+                        {(['female', 'male', 'neutral'] as const).map((group) => {
+                          const groupVoices = voicePresets.filter((v) => inferVoiceGender(v) === group);
+                          if (groupVoices.length === 0) return null;
+                          const groupLabel = group === 'female' ? 'Female Voices' : group === 'male' ? 'Male Voices' : 'Other';
+                          return (
+                            <div key={group} className="mb-3 last:mb-0">
+                              <p className="font-label text-[10px] text-muted/60 uppercase tracking-widest mb-1.5">{groupLabel}</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {groupVoices.map((preset) => (
+                                  <button
+                                    key={preset.id}
+                                    onClick={() => setSettings({ ...settings, voice_preset: preset.id })}
+                                    className={`px-3 py-2 rounded-lg text-xs text-left transition-all duration-200 ${
+                                      settings.voice_preset === preset.id
+                                        ? 'bg-primary/20 border border-primary/50 text-primary'
+                                        : 'bg-surface-high border border-border text-muted hover:border-primary/30'
+                                    }`}
+                                  >
+                                    <span className="block font-medium">{preset.name}</span>
+                                    <span className="text-[10px] font-label text-muted/50">{preset.language}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </motion.div>
                   )}
@@ -243,9 +511,18 @@ export default function AnimatePage() {
 
               <div className="flex items-center justify-between mt-4">
                 <p className="text-xs text-muted font-label">
-                  {prompt.length} chars &middot; ~{estimatedDuration.toFixed(0)}s video &middot; Cmd+Enter to generate
+                  {mode === 'single'
+                    ? <>{prompt.length} chars &middot; ~{estimatedDuration.toFixed(0)}s video &middot; Cmd+Enter to generate</>
+                    : <>{scenes.filter((s) => s.trim()).length} scene(s) &middot; ~{(settings.num_frames_per_segment / settings.fps * scenes.filter((s) => s.trim()).length).toFixed(1)}s total</>
+                  }
                 </p>
-                <Button onClick={handleGenerate} disabled={prompt.trim().length < 10} className="font-headline text-xs tracking-widest">
+                <Button
+                  onClick={handleGenerate}
+                  disabled={mode === 'single'
+                    ? prompt.trim().length < 10
+                    : scenes.filter((s) => s.trim().length >= 5).length < 2}
+                  className="font-headline text-xs tracking-widest"
+                >
                   <Film className="h-4 w-4 mr-2" />Generate Animation
                 </Button>
               </div>
@@ -280,26 +557,40 @@ export default function AnimatePage() {
               <p className="text-sm text-muted mb-2">Building your scene with AI video + voice generation...</p>
               <p className="text-xs text-muted/50 mb-6 font-label">This takes 5-15 minutes on RTX A4000. Please be patient.</p>
 
-              <div className="max-w-sm mx-auto space-y-2 mb-6">
-                {[
-                  { label: 'Parsing scene description', icon: '1' },
-                  { label: `Generating ${settings.num_clips} video clips`, icon: '2' },
-                  { label: 'Creating AI voiceover', icon: '3' },
-                  { label: 'Stitching final video', icon: '4' },
-                ].map((step, i) => (
-                  <div key={i} className="flex items-center gap-3 text-left">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] text-primary font-bold font-label">{step.icon}</div>
-                    <span className="text-xs text-muted">{step.label}</span>
-                  </div>
-                ))}
-              </div>
+              {(() => {
+                const activeScenes = scenes.filter((s) => s.trim()).length;
+                const clipsToGen = mode === 'single' ? settings.num_clips : activeScenes;
+                const totalSec = mode === 'single'
+                  ? estimatedDuration
+                  : (settings.num_frames_per_segment / settings.fps) * activeScenes;
+                const promptText = mode === 'single'
+                  ? prompt
+                  : scenes.map((s, i) => `Scene ${i + 1}: ${s.trim()}`).filter((_, i) => scenes[i].trim()).join(' | ');
+                return (
+                  <>
+                    <div className="max-w-sm mx-auto space-y-2 mb-6">
+                      {[
+                        { label: mode === 'single' ? 'Parsing scene description' : `Parsing ${activeScenes} scenes`, icon: '1' },
+                        { label: `Generating ${clipsToGen} video clip${clipsToGen !== 1 ? 's' : ''}`, icon: '2' },
+                        { label: 'Creating AI voiceover', icon: '3' },
+                        { label: 'Stitching final video', icon: '4' },
+                      ].map((step, i) => (
+                        <div key={i} className="flex items-center gap-3 text-left">
+                          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] text-primary font-bold font-label">{step.icon}</div>
+                          <span className="text-xs text-muted">{step.label}</span>
+                        </div>
+                      ))}
+                    </div>
 
-              <div className="max-w-md mx-auto bg-surface-high rounded-lg p-4 text-left border border-border">
-                <p className="text-xs text-muted font-label">Prompt: {prompt.length > 120 ? prompt.slice(0, 120) + '...' : prompt}</p>
-                <p className="text-xs text-muted/50 font-label mt-1">
-                  {settings.num_clips} clips &times; {settings.num_frames_per_segment} frames @ {settings.fps}fps = ~{estimatedDuration.toFixed(0)}s &middot; Voice: {settings.voice_preset}
-                </p>
-              </div>
+                    <div className="max-w-md mx-auto bg-surface-high rounded-lg p-4 text-left border border-border">
+                      <p className="text-xs text-muted font-label">Prompt: {promptText.length > 120 ? promptText.slice(0, 120) + '...' : promptText}</p>
+                      <p className="text-xs text-muted/50 font-label mt-1">
+                        {clipsToGen} clip{clipsToGen !== 1 ? 's' : ''} &times; {settings.num_frames_per_segment} frames @ {settings.fps}fps = ~{totalSec.toFixed(0)}s &middot; Voice: {settings.voice_preset}
+                      </p>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </motion.div>
         )}

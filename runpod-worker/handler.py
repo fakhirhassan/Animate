@@ -18,6 +18,8 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 
 T2V_PIPE = None
 T2I_PIPE = None
+TRIPOSR_MODEL = None
+RMBG_SESSION = None
 
 
 def download_model(repo_id, local_name):
@@ -161,6 +163,88 @@ def handle_t2i(job_input):
     }
 
 
+def load_triposr():
+    """Load TripoSR model for single-image-to-3D generation."""
+    global TRIPOSR_MODEL, RMBG_SESSION
+    if TRIPOSR_MODEL is not None:
+        return TRIPOSR_MODEL
+
+    from tsr.system import TSR
+    import rembg
+
+    model_path = download_model("stabilityai/TripoSR", "triposr")
+
+    print("Loading TripoSR model...")
+    TRIPOSR_MODEL = TSR.from_pretrained(
+        model_path,
+        config_name="config.yaml",
+        weight_name="model.ckpt",
+    )
+    TRIPOSR_MODEL.renderer.set_chunk_size(8192)
+    TRIPOSR_MODEL.to("cuda")
+    RMBG_SESSION = rembg.new_session()
+    print("TripoSR loaded on CUDA.")
+    return TRIPOSR_MODEL
+
+
+def handle_image_to_3d(job_input):
+    """Single-image-to-3D mesh generation using TripoSR."""
+    import io
+    from PIL import Image
+    import numpy as np
+    import rembg
+
+    model = load_triposr()
+
+    image_b64 = job_input["image_base64"]
+    if image_b64.startswith("data:"):
+        image_b64 = image_b64.split(",", 1)[1]
+    mc_resolution = job_input.get("mc_resolution", 256)
+    output_format = job_input.get("output_format", "glb").lower()
+    remove_bg = job_input.get("remove_bg", True)
+    foreground_ratio = job_input.get("foreground_ratio", 0.85)
+
+    image = Image.open(io.BytesIO(base64.b64decode(image_b64))).convert("RGBA")
+
+    if remove_bg:
+        print("Removing background...")
+        image = rembg.remove(image, session=RMBG_SESSION)
+
+    # Center foreground on gray background (TripoSR convention)
+    arr = np.array(image).astype(np.float32) / 255.0
+    if arr.shape[-1] == 4:
+        rgb = arr[..., :3] * arr[..., 3:4] + (1 - arr[..., 3:4]) * 0.5
+        image = Image.fromarray((rgb * 255).astype(np.uint8))
+    else:
+        image = image.convert("RGB")
+
+    print(f"TripoSR: mc_resolution={mc_resolution}, format={output_format}")
+    with torch.no_grad():
+        scene_codes = model([image], device="cuda")
+        meshes = model.extract_mesh(
+            scene_codes,
+            has_vertex_color=True,
+            resolution=mc_resolution,
+        )
+
+    mesh = meshes[0]
+
+    suffix = ".glb" if output_format == "glb" else ".obj"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+        mesh.export(f.name)
+        with open(f.name, "rb") as mf:
+            model_b64 = base64.b64encode(mf.read()).decode()
+        os.unlink(f.name)
+
+    return {
+        "model_base64": model_b64,
+        "format": output_format,
+        "vertex_count": int(len(mesh.vertices)),
+        "face_count": int(len(mesh.faces)),
+        "status": "success",
+    }
+
+
 def handler(job):
     """Main RunPod handler — routes to T2V or T2I based on task."""
     job_input = job["input"]
@@ -171,6 +255,8 @@ def handler(job):
             return handle_t2v(job_input)
         elif task == "text_to_image":
             return handle_t2i(job_input)
+        elif task == "image_to_3d":
+            return handle_image_to_3d(job_input)
         else:
             return {"error": f"Unknown task: {task}", "status": "failed"}
     except Exception as e:

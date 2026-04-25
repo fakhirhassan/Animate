@@ -113,14 +113,6 @@ class TwoDToThreeDConverter:
         start_time = time.time()
 
         try:
-            # Lazy initialization
-            if not self._initialized:
-                if not self.initialize():
-                    return {
-                        'success': False,
-                        'error': 'Failed to initialize converter'
-                    }
-
             # Validate input
             if not os.path.exists(input_path):
                 return {
@@ -129,6 +121,33 @@ class TwoDToThreeDConverter:
                 }
 
             logger.info(f'Starting conversion: {input_path}')
+
+            # Cloud routing — skip local model init entirely when cloud is selected
+            try:
+                from services.cloud_gpu_service import should_use_cloud, generate_3d_cloud
+                if should_use_cloud():
+                    logger.info('Routing 2D→3D to RunPod cloud (TripoSR worker)')
+                    resolution_map = {'low': 128, 'medium': 256, 'high': 512}
+                    mc_resolution = resolution_map.get(quality, 256)
+                    result = generate_3d_cloud(
+                        input_image_path=input_path,
+                        output_path=output_path,
+                        output_format=output_format,
+                        mc_resolution=mc_resolution,
+                        remove_bg=True,
+                    )
+                    result['processing_time'] = time.time() - start_time
+                    return result
+            except Exception as cloud_err:
+                logger.warning(f'Cloud 3D failed, falling back to local: {cloud_err}')
+
+            # Lazy initialization (local path)
+            if not self._initialized:
+                if not self.initialize():
+                    return {
+                        'success': False,
+                        'error': 'Failed to initialize converter'
+                    }
 
             # Step 1: Load image
             image = self._load_image(input_path, quality)

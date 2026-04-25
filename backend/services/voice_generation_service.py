@@ -125,10 +125,36 @@ def generate_speech(
     }
 
 
+def get_voice_gender(voice_preset: str) -> str:
+    """Return 'male', 'female', or 'neutral' for a Kokoro voice preset.
+
+    Kokoro naming convention: 'af_*' / 'bf_*' = female, 'am_*' / 'bm_*' = male.
+    """
+    if not voice_preset:
+        return "neutral"
+    prefix = voice_preset[:2].lower()
+    if prefix in ("af", "bf"):
+        return "female"
+    if prefix in ("am", "bm"):
+        return "male"
+    info = KOKORO_VOICES.get(voice_preset, {})
+    name = info.get("name", "").lower()
+    if "female" in name:
+        return "female"
+    if "male" in name:
+        return "male"
+    return "neutral"
+
+
 def get_available_voices() -> List[Dict[str, str]]:
     """Return list of available Kokoro voice presets."""
     return [
-        {"id": vid, "name": info["name"], "language": info["language"]}
+        {
+            "id": vid,
+            "name": info["name"],
+            "language": info["language"],
+            "gender": get_voice_gender(vid),
+        }
         for vid, info in KOKORO_VOICES.items()
     ]
 

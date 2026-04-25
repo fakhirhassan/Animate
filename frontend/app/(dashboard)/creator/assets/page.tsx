@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { conversionAPI } from '@/lib/api';
+import { withAuth } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 
 const ModelViewer = dynamic(() => import('@/components/creator/ModelViewer'), {
@@ -164,7 +165,7 @@ export default function AssetsPage() {
   };
 
   const handleDownload = (asset: Asset) => {
-    const url = asset.kind === '3d' ? `${BACKEND_URL}${asset.model_url}?download=true` : asset.url;
+    const url = asset.kind === '3d' ? withAuth(`${BACKEND_URL}${asset.model_url}?download=true`) : asset.url;
     const filename = asset.kind === '3d' ? asset.file_name : asset.kind === 'video' ? asset.filename : `image_${Date.now()}.png`;
     const a = document.createElement('a');
     a.href = url;
@@ -304,7 +305,7 @@ export default function AssetsPage() {
 
               {previewAsset.kind === '3d' && (
                 <div className="aspect-square bg-surface-high rounded-lg overflow-hidden border border-border">
-                  <ModelViewer modelUrl={`${BACKEND_URL}${previewAsset.model_url}`} />
+                  <ModelViewer modelUrl={withAuth(`${BACKEND_URL}${previewAsset.model_url}`)} />
                 </div>
               )}
               {previewAsset.kind === 'image' && (

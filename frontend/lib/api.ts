@@ -240,6 +240,17 @@ export const animationAPI = {
     num_clips?: number;
   }) => api.post('/animation/generate', data, { timeout: 1800000 }), // 30 min timeout
 
+  // Multi-scene: each entry becomes one clip, stitched with crossfades.
+  // Character seeds are preserved across scenes for visual consistency.
+  generateMultiScene: (data: {
+    scenes: string[];
+    num_frames_per_scene?: number;
+    num_inference_steps?: number;
+    fps?: number;
+    voice_preset?: string;
+    narration?: string;
+  }) => api.post('/animation/multi-scene', data, { timeout: 1800000 }),
+
   // Single clip text-to-video
   textToVideo: (data: {
     prompt: string;

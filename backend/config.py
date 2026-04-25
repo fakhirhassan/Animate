@@ -56,6 +56,8 @@ class Config:
     RUNPOD_API_KEY = os.getenv('RUNPOD_API_KEY', '')
     RUNPOD_ENDPOINT_ID = os.getenv('RUNPOD_ENDPOINT_ID', '')
     RUNPOD_T2I_ENDPOINT_ID = os.getenv('RUNPOD_T2I_ENDPOINT_ID', '')
+    # 3D endpoint (TRELLIS). Falls back to RUNPOD_ENDPOINT_ID if unset.
+    RUNPOD_3D_ENDPOINT_ID = os.getenv('RUNPOD_3D_ENDPOINT_ID', '')
 
     # Animation pipeline settings
     VIDEO_MODEL = os.getenv('VIDEO_MODEL', '1.3b')

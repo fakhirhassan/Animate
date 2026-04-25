@@ -105,18 +105,16 @@ class ConversionService:
             )
 
             if result['success']:
-                # Clean up input file after successful conversion
-                try:
-                    os.remove(input_path)
-                    logger.info(f'Cleaned up input file: {input_path}')
-                except Exception as e:
-                    logger.warning(f'Could not clean up input file: {str(e)}')
+                # Keep input file — it's used as the thumbnail in conversion history.
+                logger.info(f'Keeping input file for thumbnail: {input_path}')
 
                 return {
                     'success': True,
                     'output_file': result['output_path'],
                     'preview_url': None,  # TODO: Generate preview image
-                    'metadata': result.get('metadata', {})
+                    'method': result.get('method', 'local'),
+                    'processing_time': result.get('processing_time', 0),
+                    'metadata': result.get('metadata', {}),
                 }
             else:
                 return {

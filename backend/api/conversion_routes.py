@@ -23,16 +23,20 @@ logger = logging.getLogger(__name__)
 def get_user_id_from_request():
     """
     Extract user ID from request headers (from Supabase JWT token).
+    Falls back to ?token= query param for browser <model-viewer> and download links
+    that can't attach Authorization headers.
     """
     try:
-        # Get Authorization header
+        token = None
         auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            current_app.logger.error('No Authorization header found')
-            return None
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+        else:
+            token = request.args.get('token')
 
-        # Extract token
-        token = auth_header.split(' ')[1]
+        if not token:
+            current_app.logger.error('No auth token (header or query param) found')
+            return None
 
         # Get Supabase client and verify token
         from supabase_client.supabase_config import get_supabase

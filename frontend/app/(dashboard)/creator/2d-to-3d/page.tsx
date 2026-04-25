@@ -21,6 +21,7 @@ import ConversionHistory, {
   ConversionHistoryItem,
 } from '@/components/creator/ConversionHistory';
 import { conversionAPI } from '@/lib/api';
+import { withAuth } from '@/lib/utils';
 
 const ModelViewer = dynamic(() => import('@/components/creator/ModelViewer'), {
   ssr: false,
@@ -48,9 +49,9 @@ interface ConversionProgress {
 export default function TwoDToThreeDPage() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [settings, setSettings] = useState<ConversionSettingsData>({
-    quality: 'medium',
-    outputFormat: 'obj',
-    withTexture: false,
+    quality: 'high',
+    outputFormat: 'glb',
+    withTexture: true,
   });
   const [conversion, setConversion] = useState<ConversionProgress>({
     status: 'idle',
@@ -71,12 +72,13 @@ export default function TwoDToThreeDPage() {
           id: conv.id,
           originalImage: `${BACKEND_URL}${conv.original_image_url}`,
           thumbnailUrl: `${BACKEND_URL}${conv.thumbnail_url}`,
-          modelUrl: `${BACKEND_URL}${conv.model_url}`,
+          modelUrl: withAuth(`${BACKEND_URL}${conv.model_url}`),
           fileName: conv.file_name,
           format: conv.output_format,
           quality: conv.quality,
           createdAt: new Date(conv.created_at),
           fileSize: conv.file_size,
+          method: conv.settings?.method,
         }));
         setHistory(historyItems);
       } catch (error) {
@@ -115,21 +117,41 @@ export default function TwoDToThreeDPage() {
         }
       });
 
+      // Tick a live "elapsed" + rotating stage hint while the backend works.
+      // Cloud 3D (TripoSR ~10-20s, Hunyuan3D ~30-60s) runs synchronously in the POST,
+      // so we don't know the true stage — we rotate plausible messages based on elapsed time.
+      let stageTickerId: ReturnType<typeof setInterval> | null = null;
+      const startedAt = Date.now();
+      const stageFor = (elapsedSec: number): { message: string; progress: number } => {
+        if (elapsedSec < 4)  return { message: 'Uploading to GPU worker…',         progress: 35 };
+        if (elapsedSec < 12) return { message: 'Removing background…',              progress: 50 };
+        if (elapsedSec < 25) return { message: 'Generating 3D geometry…',           progress: 70 };
+        if (elapsedSec < 45) return { message: 'Synthesizing textures…',            progress: 85 };
+        return                         { message: 'Finalizing mesh…',               progress: 92 };
+      };
+
       const response = await new Promise<Response>((resolve, reject) => {
         xhr.onload = () => {
+          if (stageTickerId) { clearInterval(stageTickerId); stageTickerId = null; }
           if (xhr.status >= 200 && xhr.status < 300) {
-            setConversion({ status: 'uploading', progress: 30, message: 'Upload complete! Processing...' });
             resolve(new Response(xhr.responseText, { status: xhr.status, statusText: xhr.statusText, headers: new Headers({ 'Content-Type': 'application/json' }) }));
           } else {
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         };
-        xhr.onerror = () => reject(new Error('Upload failed'));
-        xhr.ontimeout = () => reject(new Error('Upload timed out'));
+        xhr.onerror = () => { if (stageTickerId) clearInterval(stageTickerId); reject(new Error('Upload failed')); };
+        xhr.ontimeout = () => { if (stageTickerId) clearInterval(stageTickerId); reject(new Error('Upload timed out')); };
         xhr.open('POST', 'http://localhost:5001/api/convert/2d-to-3d');
         const token = localStorage.getItem('authToken');
         if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.send(formData);
+
+        // Start the ticker after a moment — upload-progress handles the first 30%.
+        stageTickerId = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+          const { message, progress } = stageFor(elapsed);
+          setConversion({ status: 'processing', progress, message: `${message} (${elapsed}s)` });
+        }, 1000);
       });
 
       if (!response.ok) {
@@ -138,26 +160,20 @@ export default function TwoDToThreeDPage() {
       }
 
       const result = await response.json();
-
-      setConversion({ status: 'processing', progress: 50, message: 'Estimating depth map...' });
-      await new Promise((r) => setTimeout(r, 500));
-      setConversion({ status: 'processing', progress: 70, message: 'Generating 3D mesh...' });
-      await new Promise((r) => setTimeout(r, 500));
-      setConversion({ status: 'processing', progress: 90, message: 'Finalizing model...' });
-      await new Promise((r) => setTimeout(r, 300));
       setConversion({ status: 'completed', progress: 100, message: 'Conversion complete!' });
 
       if (result.success && result.data.download_url) {
-        const downloadUrl = `${BACKEND_URL}${result.data.download_url}`;
+        const downloadUrl = withAuth(`${BACKEND_URL}${result.data.download_url}`);
         setModelUrl(downloadUrl);
         try {
           const historyResponse = await conversionAPI.getHistory({ limit: 10 });
           const conversions = historyResponse.data.data.conversions || [];
           const historyItems: ConversionHistoryItem[] = conversions.map((conv: any) => ({
             id: conv.id, originalImage: `http://localhost:5001${conv.original_image_url}`,
-            thumbnailUrl: `http://localhost:5001${conv.thumbnail_url}`, modelUrl: `http://localhost:5001${conv.model_url}`,
+            thumbnailUrl: `http://localhost:5001${conv.thumbnail_url}`, modelUrl: withAuth(`http://localhost:5001${conv.model_url}`),
             fileName: conv.file_name, format: conv.output_format, quality: conv.quality,
             createdAt: new Date(conv.created_at), fileSize: conv.file_size,
+            method: conv.settings?.method,
           }));
           setHistory(historyItems);
         } catch (historyError) {

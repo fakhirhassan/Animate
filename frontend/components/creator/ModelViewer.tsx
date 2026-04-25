@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame, useLoader } from '@react-three/fiber';
-import { OrbitControls, Grid } from '@react-three/drei';
+import { OrbitControls, Grid, Environment } from '@react-three/drei';
 import { motion } from 'framer-motion';
 import {
   RotateCcw,
@@ -21,6 +21,33 @@ interface ModelViewerProps {
   originalImage?: string;
   onDownload?: () => void;
   isLoading?: boolean;
+}
+
+/**
+ * Center the object at origin, rotate it so its longest axis points up (Y),
+ * and scale to fit a ~2-unit cube. Works well for TripoSR/Hunyuan3D meshes
+ * that often come out lying on their side.
+ */
+function orientAndFitObject(root: THREE.Object3D) {
+  let box = new THREE.Box3().setFromObject(root);
+  let size = box.getSize(new THREE.Vector3());
+
+  // Pick the longest axis of the bounding box and rotate so it aligns with +Y.
+  const longest = size.x >= size.y && size.x >= size.z
+    ? 'x' : size.y >= size.z ? 'y' : 'z';
+  if (longest === 'x') root.rotation.z = Math.PI / 2;
+  else if (longest === 'z') root.rotation.x = -Math.PI / 2;
+  // If already y, leave it.
+
+  // Recompute bounds after rotation, then center and fit.
+  box = new THREE.Box3().setFromObject(root);
+  const center = box.getCenter(new THREE.Vector3());
+  size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const scale = maxDim > 0 ? 2 / maxDim : 1;
+
+  root.position.sub(center.multiplyScalar(scale));
+  root.scale.multiplyScalar(scale);
 }
 
 // Helper to detect file format from URL
@@ -50,15 +77,8 @@ function OBJModel({ url }: { url: string }) {
       (obj) => {
         console.log('[ModelViewer] OBJ loaded successfully!', obj);
 
-        // Center and scale the model
-        const box = new THREE.Box3().setFromObject(obj);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = maxDim > 0 ? 2 / maxDim : 1;
-
-        obj.position.sub(center);
-        obj.scale.set(scale, scale, scale);
+        // Center, orient (make longest axis vertical), and scale.
+        orientAndFitObject(obj);
 
         // Add materials if needed
         obj.traverse((child) => {
@@ -126,15 +146,8 @@ function GLTFModel({ url }: { url: string }) {
 
         const scene = gltf.scene.clone();
 
-        // Center and scale the model
-        const box = new THREE.Box3().setFromObject(scene);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = maxDim > 0 ? 2 / maxDim : 1;
-
-        scene.position.sub(center);
-        scene.scale.set(scale, scale, scale);
+        // Center, orient (longest axis up), and scale.
+        orientAndFitObject(scene);
 
         setClonedScene(scene);
         setError(null);
@@ -184,34 +197,12 @@ function Model({ url }: { url: string }) {
       setFormat(urlFormat);
       setDetectedFormat(urlFormat);
     } else {
-      // For API URLs without extension, fetch headers to detect content type
-      // or try OBJ first (since that's what the current backend outputs by default)
-      console.log('[ModelViewer] Unknown format, attempting to detect from content-type...');
-
-      fetch(url, { method: 'HEAD' })
-        .then((response) => {
-          const contentType = response.headers.get('content-type') || '';
-          console.log('[ModelViewer] Content-Type:', contentType);
-
-          if (contentType.includes('gltf-binary') || contentType.includes('model/gltf')) {
-            setFormat('glb');
-            setDetectedFormat('glb');
-          } else if (contentType.includes('text/plain') || contentType.includes('model/obj')) {
-            setFormat('obj');
-            setDetectedFormat('obj');
-          } else {
-            // Default to trying OBJ first, then GLB
-            console.log('[ModelViewer] Could not detect format from content-type, trying OBJ first');
-            setFormat('obj');
-            setDetectedFormat('obj');
-          }
-        })
-        .catch((err) => {
-          console.error('[ModelViewer] Error detecting format:', err);
-          // Default to OBJ
-          setFormat('obj');
-          setDetectedFormat('obj');
-        });
+      // API download URLs don't carry an extension. TRELLIS is the only 3D
+      // backend now and it always emits GLB, so default to GLB. (Probing with
+      // HEAD doesn't work — the download endpoint requires auth and the
+      // preflight token isn't attached to a HEAD fetch.)
+      setFormat('glb');
+      setDetectedFormat('glb');
     }
   }, [url]);
 
@@ -336,15 +327,13 @@ export default function ModelViewer({
                 gl={{ preserveDrawingBuffer: true }}
               >
                 <Suspense fallback={<LoadingSpinner />}>
-                  <ambientLight intensity={0.5} />
-                  <spotLight
-                    position={[10, 10, 10]}
-                    angle={0.15}
-                    penumbra={1}
-                    intensity={1}
-                    castShadow
-                  />
-                  <pointLight position={[-10, -10, -10]} intensity={0.5} />
+                  <ambientLight intensity={0.8} />
+                  <directionalLight position={[5, 5, 5]} intensity={1.2} castShadow />
+                  <directionalLight position={[-5, 3, -5]} intensity={0.6} />
+                  <pointLight position={[-10, -10, -10]} intensity={0.4} />
+                  {/* PBR environment so TRELLIS metallic/roughness textures show
+                      colors instead of rendering black. `studio` ships with drei. */}
+                  <Environment preset="studio" />
 
                   <Model url={modelUrl} />
 

@@ -2,6 +2,11 @@ FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 WORKDIR /
 
+# System deps for trimesh/rembg/torchmcubes
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git build-essential libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install on top of base image PyTorch (don't override it)
 RUN pip install --no-cache-dir --timeout=300 \
     runpod>=1.7.0 \
@@ -15,9 +20,24 @@ RUN pip install --no-cache-dir --timeout=300 \
     imageio \
     imageio-ffmpeg
 
-# Download Wan2.2-TI2V-5B model (5x better quality than 1.3B, same 24GB GPU)
-RUN python -c "from huggingface_hub import snapshot_download; \
-    snapshot_download('Wan-AI/Wan2.2-TI2V-5B-Diffusers', local_dir='/models/wan22-ti2v-5b')"
+# TripoSR deps (single-image-to-3D)
+RUN pip install --no-cache-dir --timeout=300 \
+    omegaconf \
+    einops \
+    trimesh \
+    rembg \
+    onnxruntime \
+    xatlas \
+    pymeshlab \
+    git+https://github.com/tatsy/torchmcubes.git
+
+# Pull TripoSR's tsr/ module into PYTHONPATH
+RUN git clone --depth 1 https://github.com/VAST-AI-Research/TripoSR /opt/TripoSR
+ENV PYTHONPATH=/opt/TripoSR:$PYTHONPATH
+
+# Models are NOT baked — they download to /runpod-volume/models on first run.
+# This keeps the image ~3GB instead of 15GB. Attach a Network Volume to your
+# RunPod endpoint so models persist across cold starts.
 
 COPY runpod-worker/handler.py /handler.py
 
