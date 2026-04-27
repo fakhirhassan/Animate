@@ -96,7 +96,7 @@ export default function Hero() {
               START CREATING
             </Button>
           </Link>
-          <Link href="/features">
+          <Link href="/showcase">
             <Button size="xl" variant="outline" className="font-headline text-sm tracking-widest">
               VIEW SHOWCASE
             </Button>

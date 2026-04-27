@@ -122,9 +122,9 @@ export default function TextToImagePage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-              <ImageIcon className="h-5 w-5 text-white" />
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+              <ImageIcon className="h-5 w-5 text-primary-foreground" />
             </div>
             Text to Image
           </h1>
@@ -155,7 +155,7 @@ export default function TextToImagePage() {
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="A beautiful sunset over mountains with a river flowing through the valley..."
                 rows={4}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 resize-none"
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:border-primary/50 resize-none"
               />
 
               {/* Settings Toggle */}
@@ -180,7 +180,7 @@ export default function TextToImagePage() {
                           onClick={() => setResolution(res)}
                           className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                             resolution.label === res.label
-                              ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50'
+                              ? 'bg-primary/20 text-primary border border-primary/50'
                               : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
                           }`}
                         >
@@ -201,7 +201,7 @@ export default function TextToImagePage() {
                       max={50}
                       value={steps}
                       onChange={(e) => setSteps(Number(e.target.value))}
-                      className="w-full accent-purple-500"
+                      className="w-full accent-primary"
                     />
                   </div>
                 </div>
@@ -211,7 +211,7 @@ export default function TextToImagePage() {
               <Button
                 onClick={handleGenerate}
                 disabled={isGenerating || !prompt.trim()}
-                className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-xl"
+                className="w-full mt-4 py-3 rounded-xl"
               >
                 {isGenerating ? (
                   <>
@@ -258,7 +258,7 @@ export default function TextToImagePage() {
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 min-h-[400px] flex items-center justify-center">
               {isGenerating ? (
                 <div className="text-center">
-                  <Loader2 className="h-12 w-12 text-purple-500 animate-spin mx-auto mb-4" />
+                  <Loader2 className="h-12 w-12 text-primary animate-spin mx-auto mb-4" />
                   <p className="text-gray-400">Generating your image...</p>
                   <p className="text-gray-500 text-sm mt-1">This may take 10-30 seconds</p>
                 </div>
@@ -305,7 +305,7 @@ export default function TextToImagePage() {
                     <button
                       key={i}
                       onClick={() => { setGeneratedImage(item.url); setPrompt(item.prompt); }}
-                      className="group aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-purple-500/50 transition-colors relative"
+                      className="group aspect-square rounded-lg overflow-hidden border border-white/10 hover:border-primary/50 transition-colors relative"
                       title={item.prompt}
                     >
                       <img src={item.url} alt={item.prompt} className="w-full h-full object-cover" />

@@ -17,6 +17,7 @@ import {
   Zap,
   HelpCircle,
   ImageIcon,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -230,6 +231,13 @@ function DesktopSidebar({
         <Button className="w-full font-label text-xs tracking-widest uppercase">
           New Project
         </Button>
+        <Link
+          href="/"
+          className="flex items-center gap-4 text-muted px-6 py-4 hover:text-accent transition-colors w-full"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          <span className="text-[10px] font-label uppercase tracking-widest">Back to Site</span>
+        </Link>
         <button className="flex items-center gap-4 text-muted px-6 py-4 hover:text-primary transition-colors w-full">
           <HelpCircle className="h-5 w-5" />
           <span className="text-[10px] font-label uppercase tracking-widest">Help Center</span>
@@ -303,6 +311,14 @@ function MobileSidebar({
             onClick={onClose}
           />
         ))}
+        <Link
+          href="/"
+          onClick={onClose}
+          className="flex items-center gap-4 px-6 py-4 text-muted hover:text-accent hover:bg-surface-high transition-colors border-l-4 border-transparent"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          <span className="text-xs font-semibold tracking-widest font-label uppercase">Back to Site</span>
+        </Link>
       </nav>
 
       {/* User Section */}

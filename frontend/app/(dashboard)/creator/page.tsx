@@ -8,7 +8,6 @@ import {
   Video,
   Wand2,
   Download,
-  Play,
   Plus,
   Trash2,
   Eye,
@@ -29,6 +28,17 @@ import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/authStore';
 import { conversionAPI } from '@/lib/api';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+
+interface RecentProject {
+  id: string;
+  name: string;
+  status: string;
+  thumbnailUrl: string | null;
+  createdAt: string;
+  format: string;
+}
+
 export default function CreatorDashboard() {
   const { user } = useAuthStore();
   const [script, setScript] = useState('');
@@ -42,11 +52,8 @@ export default function CreatorDashboard() {
     storageUsedMb: 0,
   });
 
-  const projects = [
-    { id: '1', name: 'AI Robot Animation', status: 'completed', thumbnail: null, duration: '0:45', createdAt: '2024-03-15' },
-    { id: '2', name: 'Space Journey', status: 'processing', thumbnail: null, duration: '1:20', createdAt: '2024-03-14' },
-    { id: '3', name: 'Character Walk Cycle', status: 'completed', thumbnail: null, duration: '0:30', createdAt: '2024-03-13' },
-  ];
+  const [projects, setProjects] = useState<RecentProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -65,10 +72,68 @@ export default function CreatorDashboard() {
       }
     };
 
+    const fetchProjects = async () => {
+      try {
+        const response = await conversionAPI.getHistory({ limit: 4 });
+        const conversions = response?.data?.data?.conversions || [];
+        setProjects(
+          conversions.map((c: any) => ({
+            id: c.id,
+            name: c.file_name?.replace(/\.[^.]+$/, '') || 'Untitled Model',
+            status: c.status || 'completed',
+            thumbnailUrl: c.thumbnail_url ? `${BACKEND_URL}${c.thumbnail_url}` : null,
+            createdAt: c.created_at,
+            format: c.output_format || 'glb',
+          }))
+        );
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+        setProjects([]);
+      } finally {
+        setProjectsLoading(false);
+      }
+    };
+
     if (user) {
       fetchStats();
+      fetchProjects();
     }
   }, [user]);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this project?')) return;
+    try {
+      await conversionAPI.deleteConversion(id);
+      setProjects((p) => p.filter((proj) => proj.id !== id));
+    } catch (error) {
+      console.error('Delete failed:', error);
+    }
+  };
+
+  const handleDownload = async (id: string, format: string) => {
+    try {
+      const response = await conversionAPI.downloadModel(id, true);
+      const blob = new Blob([response.data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${id}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
+  const formatDate = (iso: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days}d ago`;
+    return d.toLocaleDateString();
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -289,37 +354,80 @@ export default function CreatorDashboard() {
                     <Video className="h-5 w-5 text-accent" />
                     Recent Projects
                   </h2>
-                  <Button variant="ghost" size="sm" className="font-label text-xs uppercase tracking-widest">
-                    View All
-                  </Button>
+                  <Link href="/creator/assets">
+                    <Button variant="ghost" size="sm" className="font-label text-xs uppercase tracking-widest">
+                      View All
+                    </Button>
+                  </Link>
                 </div>
               </div>
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {projects.map((project) => (
-                    <motion.div
-                      key={project.id}
-                      whileHover={{ scale: 1.02 }}
-                      className="bg-background border border-border rounded-lg p-4 hover:border-primary transition-all duration-300"
-                    >
-                      <div className="aspect-video bg-surface-high rounded-lg mb-3 flex items-center justify-center">
-                        <Play className="h-10 w-10 text-primary" />
+                {projectsLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[0, 1, 2, 3].map((i) => (
+                      <div key={i} className="bg-background border border-border rounded-lg p-4 animate-pulse">
+                        <div className="aspect-video bg-surface-high rounded-lg mb-3" />
+                        <div className="h-4 bg-surface-high rounded w-2/3 mb-2" />
+                        <div className="h-3 bg-surface-high rounded w-1/3" />
                       </div>
-                      <h3 className="text-foreground font-semibold mb-2">{project.name}</h3>
-                      <div className="flex items-center justify-between mb-3">
-                        <Badge variant={project.status === 'completed' ? 'success' : 'warning'}>
-                          {project.status}
-                        </Badge>
-                        <span className="text-sm text-muted font-label">{project.duration}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" className="flex-1"><Eye className="mr-2 h-3 w-3" />View</Button>
-                        <Button size="sm" variant="outline"><Download className="h-3 w-3" /></Button>
-                        <Button size="sm" variant="outline" className="text-destructive hover:bg-destructive/10"><Trash2 className="h-3 w-3" /></Button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : projects.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Box className="h-12 w-12 mx-auto mb-3 text-muted opacity-40" />
+                    <p className="text-muted mb-4">No projects yet — create your first one above.</p>
+                    <Link href="/creator/2d-to-3d">
+                      <Button variant="outline" size="sm">Get Started</Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {projects.map((project) => (
+                      <motion.div
+                        key={project.id}
+                        whileHover={{ scale: 1.02 }}
+                        className="bg-background border border-border rounded-lg p-4 hover:border-primary transition-all duration-300"
+                      >
+                        <div className="aspect-video bg-surface-high rounded-lg mb-3 overflow-hidden flex items-center justify-center">
+                          {project.thumbnailUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={project.thumbnailUrl}
+                              alt={project.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            />
+                          ) : (
+                            <Box className="h-10 w-10 text-primary" />
+                          )}
+                        </div>
+                        <h3 className="text-foreground font-semibold mb-2 truncate">{project.name}</h3>
+                        <div className="flex items-center justify-between mb-3">
+                          <Badge variant={project.status === 'completed' ? 'success' : 'warning'}>
+                            {project.status}
+                          </Badge>
+                          <span className="text-sm text-muted font-label">{formatDate(project.createdAt)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Link href="/creator/assets" className="flex-1">
+                            <Button size="sm" className="w-full"><Eye className="mr-2 h-3 w-3" />View</Button>
+                          </Link>
+                          <Button size="sm" variant="outline" onClick={() => handleDownload(project.id, project.format)}>
+                            <Download className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDelete(project.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>
