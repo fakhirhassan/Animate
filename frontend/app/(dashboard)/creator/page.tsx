@@ -6,12 +6,12 @@ import {
   Upload,
   FileText,
   Video,
-  Wand2,
   Download,
   Plus,
   Trash2,
   Eye,
   Layers,
+  Loader2,
   Box,
   ArrowRight,
   TrendingUp,
@@ -279,8 +279,7 @@ export default function CreatorDashboard() {
               className="bg-surface border border-border rounded-lg bloom-shadow"
             >
               <div className="border-b border-border p-6">
-                <h2 className="text-lg font-headline font-bold text-foreground flex items-center gap-2 uppercase tracking-tight">
-                  <Wand2 className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-headline font-bold text-foreground uppercase tracking-tight">
                   Create New Animation
                 </h2>
               </div>
@@ -311,9 +310,9 @@ export default function CreatorDashboard() {
                     <div className="flex items-center gap-3">
                       <Button className="flex-1" onClick={handleGenerate} disabled={!script || isGenerating}>
                         {isGenerating ? (
-                          <><Wand2 className="mr-2 h-4 w-4 animate-spin" />Generating...</>
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating...</>
                         ) : (
-                          <><Wand2 className="mr-2 h-4 w-4" />Generate Animation</>
+                          <>Generate Animation</>
                         )}
                       </Button>
                       <Button variant="outline">
@@ -490,7 +489,7 @@ export default function CreatorDashboard() {
                 </Link>
                 <Link href="/creator/animate" className="block">
                   <Button variant="outline" className="w-full justify-start">
-                    <Wand2 className="mr-2 h-4 w-4 text-highlight" />Text to Animation
+                    Text to Animation
                     <ArrowRight className="ml-auto h-4 w-4 opacity-50" />
                   </Button>
                 </Link>

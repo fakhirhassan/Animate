@@ -282,6 +282,23 @@ export const voiceAPI = {
   getPresets: () => api.get('/voice/presets'),
 };
 
+// Chat / Assistant API
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export const chatAPI = {
+  send: (data: {
+    message: string;
+    history?: ChatTurn[];
+    page?: string;
+    mode?: 'assistant' | 'refine';
+  }) => api.post('/chat/message', data, { timeout: 60000 }),
+
+  status: () => api.get('/chat/status'),
+};
+
 // Image Generation API (Text-to-Image)
 export const imageAPI = {
   generate: (data: {

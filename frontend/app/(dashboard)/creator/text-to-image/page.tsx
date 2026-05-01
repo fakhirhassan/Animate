@@ -9,7 +9,6 @@ import {
   ImageIcon,
   Loader2,
   Download,
-  Sparkles,
   RefreshCw,
   Settings2,
   ChevronDown,
@@ -235,7 +234,6 @@ export default function TextToImagePage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-4 w-4 mr-2" />
                     Generate Image
                   </>
                 )}

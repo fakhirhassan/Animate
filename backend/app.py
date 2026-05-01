@@ -21,7 +21,7 @@ load_dotenv()
 from config import config
 
 # Import API routes
-from api import conversion_routes, auth_routes, script_routes, voice_routes, animation_routes, admin_routes, image_routes
+from api import conversion_routes, auth_routes, script_routes, voice_routes, animation_routes, admin_routes, image_routes, chat_routes
 
 
 def create_app(config_name=None):
@@ -139,6 +139,7 @@ def register_blueprints(app):
     app.register_blueprint(animation_routes.bp, url_prefix='/api/animation')
     app.register_blueprint(admin_routes.bp, url_prefix='/api/admin')
     app.register_blueprint(image_routes.bp, url_prefix='/api/image')
+    app.register_blueprint(chat_routes.bp, url_prefix='/api/chat')
 
     app.logger.info('All blueprints registered successfully')
 

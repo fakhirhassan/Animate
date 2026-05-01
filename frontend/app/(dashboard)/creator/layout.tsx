@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuthStore } from '@/store/authStore';
+import ChatWidget from '@/components/chat/ChatWidget';
 
 const navItems = [
   {
@@ -185,6 +186,8 @@ export default function CreatorLayout({
       <main className="lg:ml-64 pt-16 lg:pt-0 min-h-screen">
         {children}
       </main>
+
+      <ChatWidget />
     </div>
   );
 }

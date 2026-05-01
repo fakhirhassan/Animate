@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Film,
-  Sparkles,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -267,12 +266,9 @@ export default function AnimatePage() {
           <motion.div key="input" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-4">
             <div className="bg-surface border border-border rounded-lg p-6 bloom-shadow">
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-highlight" />
-                  <h2 className="font-headline text-sm font-bold text-foreground uppercase tracking-tight">
-                    {mode === 'single' ? 'Describe Your Scene' : 'Describe Your Scenes'}
-                  </h2>
-                </div>
+                <h2 className="font-headline text-sm font-bold text-foreground uppercase tracking-tight">
+                  {mode === 'single' ? 'Describe Your Scene' : 'Describe Your Scenes'}
+                </h2>
                 {/* Mode switcher */}
                 <div className="inline-flex bg-surface-high rounded-lg p-0.5 border border-border">
                   <button
