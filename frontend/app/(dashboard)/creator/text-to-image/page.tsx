@@ -1,8 +1,7 @@
 'use client';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
-const IMAGE_HISTORY_KEY = 'mesh_image_history';
-const MAX_HISTORY = 24;
+const HISTORY_LIMIT = 24;
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -16,7 +15,14 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { imageAPI } from '@/lib/api';
+import { imageAPI, conversionAPI } from '@/lib/api';
+
+interface ImageHistoryItem {
+  id: string;
+  url: string;
+  prompt: string;
+  createdAt: string;
+}
 
 const EXAMPLE_PROMPTS = [
   'A majestic dragon perched on a crystal mountain at sunset, digital art',
@@ -43,16 +49,29 @@ export default function TextToImagePage() {
   const [showSettings, setShowSettings] = useState(false);
   const [resolution, setResolution] = useState(RESOLUTIONS[0]);
   const [steps, setSteps] = useState(25);
-  const [imageHistory, setImageHistory] = useState<Array<{ url: string; prompt: string; createdAt: string }>>([]);
+  const [imageHistory, setImageHistory] = useState<ImageHistoryItem[]>([]);
 
   useEffect(() => {
     checkAvailability();
-    // Load persisted history
-    try {
-      const saved = JSON.parse(localStorage.getItem(IMAGE_HISTORY_KEY) || '[]');
-      setImageHistory(saved);
-    } catch {}
+    loadHistory();
   }, []);
+
+  const loadHistory = async () => {
+    try {
+      const response = await conversionAPI.getHistory({ limit: HISTORY_LIMIT, type: 'image' });
+      const rows = response?.data?.data?.conversions || [];
+      setImageHistory(
+        rows.map((r: any) => ({
+          id: r.id,
+          url: r.model_url?.startsWith('http') ? r.model_url : `${BACKEND_URL}${r.model_url}`,
+          prompt: r.settings?.prompt || r.file_name || 'Untitled',
+          createdAt: r.created_at,
+        }))
+      );
+    } catch {
+      setImageHistory([]);
+    }
+  };
 
   const checkAvailability = async () => {
     try {
@@ -88,12 +107,8 @@ export default function TextToImagePage() {
       if (result?.image_url) {
         const fullUrl = `${BACKEND_URL}${result.image_url}`;
         setGeneratedImage(fullUrl);
-        const newItem = { url: fullUrl, prompt: prompt.trim(), createdAt: new Date().toISOString() };
-        setImageHistory(prev => {
-          const updated = [newItem, ...prev].slice(0, MAX_HISTORY);
-          localStorage.setItem(IMAGE_HISTORY_KEY, JSON.stringify(updated));
-          return updated;
-        });
+        // Backend persisted the row; refetch so the new item shows up with its DB id.
+        loadHistory();
       } else {
         setError('No image returned from server');
       }

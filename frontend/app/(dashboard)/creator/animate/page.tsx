@@ -20,13 +20,12 @@ import {
   GripVertical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { animationAPI, voiceAPI } from '@/lib/api';
+import { animationAPI, voiceAPI, conversionAPI } from '@/lib/api';
 
 type Stage = 'input' | 'generating' | 'preview';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
-const VIDEO_HISTORY_KEY = 'mesh_video_history';
-const MAX_HISTORY = 12;
+const HISTORY_LIMIT = 12;
 
 interface VoicePreset {
   id: string;
@@ -47,6 +46,7 @@ function inferVoiceGender(preset: VoicePreset): 'female' | 'male' | 'neutral' {
 }
 
 interface VideoHistoryItem {
+  id: string;
   url: string;
   prompt: string;
   filename: string;
@@ -54,16 +54,21 @@ interface VideoHistoryItem {
   createdAt: string;
 }
 
-function loadVideoHistory(): VideoHistoryItem[] {
+async function fetchVideoHistory(): Promise<VideoHistoryItem[]> {
   try {
-    return JSON.parse(localStorage.getItem(VIDEO_HISTORY_KEY) || '[]');
+    const response = await conversionAPI.getHistory({ limit: HISTORY_LIMIT, type: 'animation' });
+    const rows = response?.data?.data?.conversions || [];
+    return rows.map((r: any) => ({
+      id: r.id,
+      url: r.model_url?.startsWith('http') ? r.model_url : `${API_BASE}${r.model_url}`,
+      prompt: r.settings?.prompt || r.file_name || 'Untitled',
+      filename: r.file_name || 'animation.mp4',
+      duration: r.settings?.duration ? `${r.settings.duration}s` : '',
+      createdAt: r.created_at,
+    }));
   } catch {
     return [];
   }
-}
-
-function saveVideoHistory(items: VideoHistoryItem[]) {
-  localStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY)));
 }
 
 // Duration presets — each chooses sensible num_clips + frames/clip combos.
@@ -114,7 +119,7 @@ export default function AnimatePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    setVideoHistory(loadVideoHistory());
+    fetchVideoHistory().then(setVideoHistory);
     voiceAPI.getPresets()
       .then((res) => {
         if (res.data?.data?.presets) {
@@ -184,17 +189,8 @@ export default function AnimatePage() {
         setVideoUrl(fullUrl);
         setVideoMeta(data.data);
         setStage('preview');
-        // Persist to history
-        const newItem: VideoHistoryItem = {
-          url: fullUrl,
-          prompt: promptForHistory,
-          filename: data.data.filename || 'animation.mp4',
-          duration: data.data.duration ? `${data.data.duration}s` : '',
-          createdAt: new Date().toISOString(),
-        };
-        const updated = [newItem, ...loadVideoHistory()];
-        saveVideoHistory(updated);
-        setVideoHistory(updated);
+        // Backend persisted the row; refetch so the list reflects DB state.
+        fetchVideoHistory().then(setVideoHistory);
       } else {
         setError(data.message || 'Failed to generate animation');
         setStage('input');

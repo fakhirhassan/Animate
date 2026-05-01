@@ -200,7 +200,7 @@ export const conversionAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
-  getHistory: (params?: { limit?: number; offset?: number; status?: string }) =>
+  getHistory: (params?: { limit?: number; offset?: number; status?: string; type?: '3d' | 'image' | 'animation' }) =>
     api.get('/convert/history', { params }),
 
   getConversionById: (id: string) => api.get(`/convert/history/${id}`),

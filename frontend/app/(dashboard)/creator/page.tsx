@@ -37,6 +37,8 @@ interface RecentProject {
   thumbnailUrl: string | null;
   createdAt: string;
   format: string;
+  type: '3d' | 'image' | 'animation';
+  modelUrl: string;
 }
 
 export default function CreatorDashboard() {
@@ -77,14 +79,26 @@ export default function CreatorDashboard() {
         const response = await conversionAPI.getHistory({ limit: 4 });
         const conversions = response?.data?.data?.conversions || [];
         setProjects(
-          conversions.map((c: any) => ({
-            id: c.id,
-            name: c.file_name?.replace(/\.[^.]+$/, '') || 'Untitled Model',
-            status: c.status || 'completed',
-            thumbnailUrl: c.thumbnail_url ? `${BACKEND_URL}${c.thumbnail_url}` : null,
-            createdAt: c.created_at,
-            format: c.output_format || 'glb',
-          }))
+          conversions.map((c: any) => {
+            const type = (c.type || '3d') as '3d' | 'image' | 'animation';
+            const rawThumb = type === '3d' ? c.thumbnail_url : c.model_url;
+            const thumbnailUrl = rawThumb
+              ? rawThumb.startsWith('http') ? rawThumb : `${BACKEND_URL}${rawThumb}`
+              : null;
+            const modelUrl = c.model_url?.startsWith('http')
+              ? c.model_url
+              : `${BACKEND_URL}${c.model_url || ''}`;
+            return {
+              id: c.id,
+              name: c.settings?.prompt?.slice(0, 60) || c.file_name?.replace(/\.[^.]+$/, '') || 'Untitled',
+              status: c.status || 'completed',
+              thumbnailUrl,
+              createdAt: c.created_at,
+              format: c.output_format || (type === 'image' ? 'png' : type === 'animation' ? 'mp4' : 'glb'),
+              type,
+              modelUrl,
+            };
+          })
         );
       } catch (error) {
         console.error('Failed to fetch projects:', error);
@@ -110,16 +124,24 @@ export default function CreatorDashboard() {
     }
   };
 
-  const handleDownload = async (id: string, format: string) => {
+  const handleDownload = async (project: RecentProject) => {
     try {
-      const response = await conversionAPI.downloadModel(id, true);
-      const blob = new Blob([response.data]);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${id}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (project.type === '3d') {
+        const response = await conversionAPI.downloadModel(project.id, true);
+        const blob = new Blob([response.data]);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${project.name}.${project.format}`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // Images and videos are static files — download directly.
+        const a = document.createElement('a');
+        a.href = project.modelUrl;
+        a.download = `${project.name}.${project.format}`;
+        a.click();
+      }
     } catch (error) {
       console.error('Download failed:', error);
     }
@@ -388,8 +410,15 @@ export default function CreatorDashboard() {
                         whileHover={{ scale: 1.02 }}
                         className="bg-background border border-border rounded-lg p-4 hover:border-primary transition-all duration-300"
                       >
-                        <div className="aspect-video bg-surface-high rounded-lg mb-3 overflow-hidden flex items-center justify-center">
-                          {project.thumbnailUrl ? (
+                        <div className="aspect-video bg-surface-high rounded-lg mb-3 overflow-hidden flex items-center justify-center relative">
+                          {project.type === 'animation' && project.thumbnailUrl ? (
+                            <video
+                              src={project.thumbnailUrl}
+                              className="w-full h-full object-cover"
+                              muted
+                              playsInline
+                            />
+                          ) : project.thumbnailUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={project.thumbnailUrl}
@@ -400,6 +429,12 @@ export default function CreatorDashboard() {
                           ) : (
                             <Box className="h-10 w-10 text-primary" />
                           )}
+                          <Badge
+                            variant={project.type === '3d' ? 'default' : project.type === 'image' ? 'info' : 'admin'}
+                            className="absolute top-2 right-2 text-[9px] uppercase"
+                          >
+                            {project.type === '3d' ? '3D' : project.type === 'image' ? 'Image' : 'Video'}
+                          </Badge>
                         </div>
                         <h3 className="text-foreground font-semibold mb-2 truncate">{project.name}</h3>
                         <div className="flex items-center justify-between mb-3">
@@ -412,7 +447,7 @@ export default function CreatorDashboard() {
                           <Link href="/creator/assets" className="flex-1">
                             <Button size="sm" className="w-full"><Eye className="mr-2 h-3 w-3" />View</Button>
                           </Link>
-                          <Button size="sm" variant="outline" onClick={() => handleDownload(project.id, project.format)}>
+                          <Button size="sm" variant="outline" onClick={() => handleDownload(project)}>
                             <Download className="h-3 w-3" />
                           </Button>
                           <Button

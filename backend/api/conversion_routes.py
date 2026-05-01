@@ -148,6 +148,7 @@ def convert_2d_to_3d():
 
             # Prepare conversion data for database
             conversion_data = {
+                'type': '3d',
                 'file_name': secure_filename(file.filename),
                 'original_image_url': f'/uploads/input/{os.path.basename(input_path)}',
                 'model_url': f'/api/convert/download/{job_id}',
@@ -304,9 +305,10 @@ def get_conversion_history():
         limit = int(request.args.get('limit', 10))
         offset = int(request.args.get('offset', 0))
         status = request.args.get('status')
+        conversion_type = request.args.get('type')
 
         db_service = ConversionDatabaseService()
-        result = db_service.get_user_conversions(user_id, limit, offset, status)
+        result = db_service.get_user_conversions(user_id, limit, offset, status, conversion_type)
 
         if not result['success']:
             return error_response(result.get('message', 'Failed to fetch history'), 500)

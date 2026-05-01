@@ -3,15 +3,70 @@ Animation Generation API Routes
 Text-to-video and full animation pipeline using Wan2.1 + Kokoro TTS.
 """
 
+import os
 import logging
+from typing import Optional
 from flask import Blueprint, request
 from PIL import Image
 
 from utils.response_formatter import success_response, error_response
 from utils.auth import login_required
+from services.conversion_db_service import ConversionDatabaseService
 
 bp = Blueprint('animation', __name__)
 logger = logging.getLogger(__name__)
+
+
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _file_size_str(rel_url: str) -> str:
+    """Compute file size for an /uploads/... URL. Returns '' if not found."""
+    try:
+        rel = rel_url.lstrip('/')
+        full = os.path.join(_BACKEND_DIR, rel)
+        if os.path.exists(full):
+            size_bytes = os.path.getsize(full)
+            return f'{size_bytes / (1024 * 1024):.2f} MB'
+    except Exception:
+        pass
+    return ''
+
+
+def _persist_animation(user_id: Optional[str], result: dict, prompt: str, settings: dict) -> None:
+    """Save a generated animation/video to the conversions table.
+
+    Non-fatal: any failure here is logged and swallowed so generation still
+    returns the video URL to the client even if persistence breaks.
+    """
+    try:
+        if not user_id or not isinstance(result, dict):
+            return
+        video_url = result.get('video_url')
+        if not video_url:
+            return
+        filename = result.get('filename') or os.path.basename(video_url)
+        db_service = ConversionDatabaseService()
+        db_service.save_conversion(user_id, {
+            'type': 'animation',
+            'file_name': filename or 'animation.mp4',
+            'original_image_url': '',
+            'model_url': video_url,
+            'thumbnail_url': video_url,
+            'output_format': 'mp4',
+            'quality': 'medium',
+            'status': 'completed',
+            'file_size': _file_size_str(video_url),
+            'settings': {
+                'prompt': prompt,
+                'duration': result.get('duration'),
+                'fps': result.get('fps'),
+                'num_segments': result.get('num_segments'),
+                **settings,
+            },
+        })
+    except Exception as e:
+        logger.error(f'Animation DB save failed (non-fatal): {e}')
 
 
 @bp.route('/generate', methods=['POST'])
@@ -41,6 +96,19 @@ def generate_full_animation():
             fps=data.get('fps', 16),
             voice_preset=data.get('voice_preset', 'af_heart'),
             num_clips=data.get('num_clips', 4),
+        )
+
+        _persist_animation(
+            user_id=getattr(request, 'user_id', None),
+            result=result,
+            prompt=data['text'],
+            settings={
+                'mode': 'single',
+                'voice_preset': data.get('voice_preset', 'af_heart'),
+                'num_clips': data.get('num_clips', 4),
+                'num_frames_per_segment': data.get('num_frames_per_segment', 33),
+                'num_inference_steps': data.get('num_inference_steps', 30),
+            },
         )
 
         return success_response(result, 'Animation generated successfully')
@@ -89,6 +157,22 @@ def generate_multi_scene():
             voice_preset=data.get('voice_preset', 'af_heart'),
             narration=data.get('narration', ''),
         )
+
+        prompt_summary = ' | '.join(f'Scene {i+1}: {s}' for i, s in enumerate(scenes))
+        _persist_animation(
+            user_id=getattr(request, 'user_id', None),
+            result=result,
+            prompt=prompt_summary,
+            settings={
+                'mode': 'multi',
+                'scenes': scenes,
+                'narration': data.get('narration', ''),
+                'voice_preset': data.get('voice_preset', 'af_heart'),
+                'num_frames_per_scene': int(data.get('num_frames_per_scene', 81)),
+                'num_inference_steps': int(data.get('num_inference_steps', 30)),
+            },
+        )
+
         return success_response(result, 'Multi-scene animation generated successfully')
 
     except RuntimeError as e:
@@ -138,6 +222,19 @@ def animate_image_with_voice():
             voice_preset=voice_preset,
         )
 
+        _persist_animation(
+            user_id=getattr(request, 'user_id', None),
+            result=result,
+            prompt=text or f'Image animation: {image_file.filename}',
+            settings={
+                'mode': 'image-animate',
+                'source_image': image_file.filename,
+                'voice_preset': voice_preset,
+                'num_frames': num_frames,
+                'num_inference_steps': num_inference_steps,
+            },
+        )
+
         return success_response(result, 'Image animation generated successfully')
 
     except RuntimeError as e:
@@ -177,6 +274,25 @@ def text_to_video():
             height=data.get('height', 480),
             width=data.get('width', 832),
             seed=data.get('seed'),
+        )
+
+        # The single-clip endpoint returns `video_url` too; normalize for persistence.
+        if isinstance(result, dict) and 'video_url' not in result:
+            filepath = result.get('filepath', '')
+            if filepath:
+                result['video_url'] = '/uploads/output/animations/' + os.path.basename(filepath)
+
+        _persist_animation(
+            user_id=getattr(request, 'user_id', None),
+            result=result,
+            prompt=data['prompt'],
+            settings={
+                'mode': 'text-to-video',
+                'num_frames': data.get('num_frames', 33),
+                'num_inference_steps': data.get('num_inference_steps', 30),
+                'height': data.get('height', 480),
+                'width': data.get('width', 832),
+            },
         )
 
         return success_response(result, 'Video generated successfully')

@@ -46,6 +46,7 @@ class ConversionDatabaseService:
             # Prepare conversion record
             conversion_record = {
                 'user_id': user_id,
+                'type': conversion_data.get('type', '3d'),
                 'file_name': conversion_data.get('file_name', 'unnamed'),
                 'original_image_url': conversion_data.get('original_image_url', ''),
                 'model_url': conversion_data.get('model_url', ''),
@@ -81,7 +82,8 @@ class ConversionDatabaseService:
         user_id: str,
         limit: int = 10,
         offset: int = 0,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        conversion_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get conversions for a specific user.
@@ -91,6 +93,7 @@ class ConversionDatabaseService:
             limit: Maximum number of records to return
             offset: Number of records to skip (for pagination)
             status: Filter by status (optional)
+            conversion_type: Filter by type — '3d', 'image', or 'animation' (optional)
 
         Returns:
             Dictionary with conversions list and total count
@@ -103,6 +106,10 @@ class ConversionDatabaseService:
             if status:
                 query = query.eq('status', status)
 
+            # Apply type filter if provided
+            if conversion_type:
+                query = query.eq('type', conversion_type)
+
             # Apply ordering, limit, and offset
             query = query.order('created_at', desc=True).range(offset, offset + limit - 1)
 
@@ -113,6 +120,8 @@ class ConversionDatabaseService:
             count_response = self.supabase.table('conversions').select('id', count='exact').eq('user_id', user_id)
             if status:
                 count_response = count_response.eq('status', status)
+            if conversion_type:
+                count_response = count_response.eq('type', conversion_type)
             count_result = count_response.execute()
 
             return {

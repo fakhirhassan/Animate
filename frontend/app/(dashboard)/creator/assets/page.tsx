@@ -1,8 +1,6 @@
 'use client';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
-const IMAGE_HISTORY_KEY = 'mesh_image_history';
-const VIDEO_HISTORY_KEY = 'mesh_video_history';
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -93,30 +91,46 @@ export default function AssetsPage() {
   const loadAll = async () => {
     setIsLoading(true);
 
-    // Load 3D models from backend
     try {
-      const response = await conversionAPI.getHistory({ limit: 50 });
-      const conversions = response?.data?.data?.conversions || [];
-      setModels(conversions.map((c: any) => ({ kind: '3d', ...c })));
+      // Single backend call returns all types — split client-side by `type`.
+      const response = await conversionAPI.getHistory({ limit: 200 });
+      const conversions: any[] = response?.data?.data?.conversions || [];
+
+      const m: Model3D[] = [];
+      const imgs: ImageAsset[] = [];
+      const vids: VideoAsset[] = [];
+
+      for (const c of conversions) {
+        if (c.type === 'image') {
+          imgs.push({
+            kind: 'image',
+            id: c.id,
+            url: c.model_url?.startsWith('http') ? c.model_url : `${BACKEND_URL}${c.model_url}`,
+            prompt: c.settings?.prompt || c.file_name || 'Untitled',
+            createdAt: c.created_at,
+          });
+        } else if (c.type === 'animation') {
+          vids.push({
+            kind: 'video',
+            id: c.id,
+            url: c.model_url?.startsWith('http') ? c.model_url : `${BACKEND_URL}${c.model_url}`,
+            prompt: c.settings?.prompt || c.file_name || 'Untitled',
+            filename: c.file_name || 'animation.mp4',
+            duration: c.settings?.duration ? `${c.settings.duration}s` : '',
+            createdAt: c.created_at,
+          });
+        } else {
+          // type === '3d' (default)
+          m.push({ kind: '3d', ...c });
+        }
+      }
+
+      setModels(m);
+      setImages(imgs);
+      setVideos(vids);
     } catch {
       setModels([]);
-    }
-
-    // Load images from localStorage
-    try {
-      const saved: Array<{ url: string; prompt: string; createdAt: string }> =
-        JSON.parse(localStorage.getItem(IMAGE_HISTORY_KEY) || '[]');
-      setImages(saved.map((item, i) => ({ kind: 'image' as const, id: `img_${i}_${item.createdAt}`, ...item })));
-    } catch {
       setImages([]);
-    }
-
-    // Load videos from localStorage
-    try {
-      const saved: Array<{ url: string; prompt: string; filename: string; duration: string; createdAt: string }> =
-        JSON.parse(localStorage.getItem(VIDEO_HISTORY_KEY) || '[]');
-      setVideos(saved.map((item, i) => ({ kind: 'video' as const, id: `vid_${i}_${item.createdAt}`, ...item })));
-    } catch {
       setVideos([]);
     }
 
@@ -143,23 +157,14 @@ export default function AssetsPage() {
 
   const handleDelete = async (asset: Asset) => {
     if (!confirm('Delete this asset?')) return;
-    if (asset.kind === '3d') {
-      try {
-        await conversionAPI.deleteConversion(asset.id);
-        setModels(prev => prev.filter(m => m.id !== asset.id));
-      } catch { alert('Failed to delete model'); return; }
-    } else if (asset.kind === 'image') {
-      setImages(prev => {
-        const updated = prev.filter(i => i.id !== asset.id);
-        localStorage.setItem(IMAGE_HISTORY_KEY, JSON.stringify(updated.map(({ kind, id, ...rest }) => rest)));
-        return updated;
-      });
-    } else {
-      setVideos(prev => {
-        const updated = prev.filter(v => v.id !== asset.id);
-        localStorage.setItem(VIDEO_HISTORY_KEY, JSON.stringify(updated.map(({ kind, id, ...rest }) => rest)));
-        return updated;
-      });
+    try {
+      await conversionAPI.deleteConversion(asset.id);
+      if (asset.kind === '3d') setModels(prev => prev.filter(m => m.id !== asset.id));
+      else if (asset.kind === 'image') setImages(prev => prev.filter(i => i.id !== asset.id));
+      else setVideos(prev => prev.filter(v => v.id !== asset.id));
+    } catch {
+      alert('Failed to delete asset');
+      return;
     }
     if (previewAsset?.id === asset.id) setPreviewAsset(null);
   };

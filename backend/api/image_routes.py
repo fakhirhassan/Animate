@@ -3,14 +3,32 @@ Image Generation API Routes
 Text-to-image generation using cloud GPU (Flux/SDXL).
 """
 
+import os
 import logging
 from flask import Blueprint, request
 
 from utils.response_formatter import success_response, error_response
 from utils.auth import login_required
+from services.conversion_db_service import ConversionDatabaseService
 
 bp = Blueprint('image', __name__)
 logger = logging.getLogger(__name__)
+
+
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _file_size_str(rel_url: str) -> str:
+    """Compute file size for an /uploads/... URL. Returns '' if not found."""
+    try:
+        rel = rel_url.lstrip('/')
+        full = os.path.join(_BACKEND_DIR, rel)
+        if os.path.exists(full):
+            size_bytes = os.path.getsize(full)
+            return f'{size_bytes / (1024 * 1024):.2f} MB'
+    except Exception:
+        pass
+    return ''
 
 
 @bp.route('/generate', methods=['POST'])
@@ -43,6 +61,34 @@ def generate_image():
             num_inference_steps=data.get('num_inference_steps', 25),
             seed=data.get('seed'),
         )
+
+        # Persist to DB so the image survives server restarts and shows in
+        # Assets / Recents across devices.
+        try:
+            user_id = getattr(request, 'user_id', None)
+            image_url = result.get('image_url') if isinstance(result, dict) else None
+            if user_id and image_url:
+                db_service = ConversionDatabaseService()
+                db_service.save_conversion(user_id, {
+                    'type': 'image',
+                    'file_name': os.path.basename(image_url) or f'image_{prompt[:20]}.png',
+                    'original_image_url': image_url,
+                    'model_url': image_url,
+                    'thumbnail_url': image_url,
+                    'output_format': 'png',
+                    'quality': 'medium',
+                    'status': 'completed',
+                    'file_size': _file_size_str(image_url),
+                    'settings': {
+                        'prompt': prompt,
+                        'width': data.get('width', 1024),
+                        'height': data.get('height', 1024),
+                        'num_inference_steps': data.get('num_inference_steps', 25),
+                        'seed': data.get('seed'),
+                    },
+                })
+        except Exception as db_error:
+            logger.error(f'Image DB save failed (non-fatal): {db_error}')
 
         return success_response(result, 'Image generated successfully')
 
