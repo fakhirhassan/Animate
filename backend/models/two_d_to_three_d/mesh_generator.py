@@ -21,11 +21,17 @@ try:
 except ImportError:
     logger.warning('trimesh not available')
 
-try:
-    import open3d as o3d
-    OPEN3D_AVAILABLE = True
-except ImportError:
-    logger.warning('open3d not available')
+o3d = None
+
+def _load_open3d():
+    global o3d, OPEN3D_AVAILABLE
+    if o3d is None:
+        try:
+            import open3d as _o3d
+            o3d = _o3d
+            OPEN3D_AVAILABLE = True
+        except ImportError:
+            logger.warning('open3d not available')
 
 
 class MeshGenerator:
@@ -161,6 +167,7 @@ class MeshGenerator:
         settings: Dict
     ) -> Optional[Dict[str, Any]]:
         """Create mesh using Open3D library."""
+        _load_open3d()
         try:
             # Create point cloud
             pcd = o3d.geometry.PointCloud()
@@ -333,6 +340,7 @@ class MeshGenerator:
 
     def _export_open3d(self, mesh, output_path: str, format: str) -> bool:
         """Export using Open3D."""
+        _load_open3d()
         try:
             if format == 'glb':
                 # Open3D doesn't directly support GLB, convert through trimesh

@@ -3,7 +3,24 @@ from typing import Callable, Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-from torchmcubes import marching_cubes
+from skimage.measure import marching_cubes as sk_marching_cubes
+
+
+def marching_cubes(volume, isolevel):
+    """Wrapper around scikit-image marching cubes to match torchmcubes interface."""
+    volume_np = volume.cpu().numpy()
+
+    # scikit-image requires isolevel to be within the volume data range.
+    # Clamp isolevel if it falls outside the range.
+    vmin, vmax = volume_np.min(), volume_np.max()
+    if isolevel < vmin or isolevel > vmax:
+        # Use midpoint of the data range as a fallback
+        isolevel = (vmin + vmax) / 2.0
+
+    verts, faces, _, _ = sk_marching_cubes(volume_np, level=isolevel)
+    v_pos = torch.from_numpy(verts.copy()).float()
+    t_pos_idx = torch.from_numpy(faces.copy()).long()
+    return v_pos, t_pos_idx
 
 
 class IsosurfaceHelper(nn.Module):
@@ -42,11 +59,7 @@ class MarchingCubeHelper(IsosurfaceHelper):
         level: torch.FloatTensor,
     ) -> Tuple[torch.FloatTensor, torch.LongTensor]:
         level = -level.view(self.resolution, self.resolution, self.resolution)
-        try:
-            v_pos, t_pos_idx = self.mc_func(level.detach(), 0.0)
-        except AttributeError:
-            print("torchmcubes was not compiled with CUDA support, use CPU version instead.")
-            v_pos, t_pos_idx = self.mc_func(level.detach().cpu(), 0.0)
+        v_pos, t_pos_idx = self.mc_func(level.detach(), 0.0)
         v_pos = v_pos[..., [2, 1, 0]]
         v_pos = v_pos / (self.resolution - 1.0)
         return v_pos.to(level.device), t_pos_idx.to(level.device)

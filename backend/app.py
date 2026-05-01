@@ -1,9 +1,14 @@
 """
-AniMate Flask Backend
+Mesh Flask Backend
 Main application entry point for AI-powered animation generation.
 """
 
 import os
+
+# Fix OpenMP conflict between open3d and onnxruntime (must be set before any imports)
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+os.environ['OMP_NUM_THREADS'] = '1'
+
 import logging
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
@@ -16,7 +21,7 @@ load_dotenv()
 from config import config
 
 # Import API routes
-from api import conversion_routes, auth_routes, script_routes, voice_routes, animation_routes, admin_routes
+from api import conversion_routes, auth_routes, script_routes, voice_routes, animation_routes, admin_routes, image_routes, chat_routes, edit_routes
 
 
 def create_app(config_name=None):
@@ -68,7 +73,7 @@ def create_app(config_name=None):
     def health_check():
         return jsonify({
             'status': 'healthy',
-            'service': 'AniMate Backend',
+            'service': 'Mesh Backend',
             'version': '1.0.0'
         }), 200
 
@@ -76,7 +81,7 @@ def create_app(config_name=None):
     @app.route('/', methods=['GET'])
     def root():
         return jsonify({
-            'message': 'Welcome to AniMate AI Backend',
+            'message': 'Welcome to Mesh AI Backend',
             'version': '1.0.0',
             'endpoints': {
                 'health': '/health',
@@ -93,7 +98,7 @@ def create_app(config_name=None):
         upload_folder = app.config['UPLOAD_FOLDER']
         return send_from_directory(upload_folder, filename)
 
-    app.logger.info(f'AniMate backend started in {config_name} mode')
+    app.logger.info(f'Mesh backend started in {config_name} mode')
 
     return app
 
@@ -107,7 +112,7 @@ def setup_logging(app):
         os.makedirs('logs')
 
     # File handler for logging
-    file_handler = logging.FileHandler('logs/animate.log')
+    file_handler = logging.FileHandler('logs/mesh.log')
     file_handler.setLevel(log_level)
     file_handler.setFormatter(logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -133,6 +138,9 @@ def register_blueprints(app):
     app.register_blueprint(voice_routes.bp, url_prefix='/api/voice')
     app.register_blueprint(animation_routes.bp, url_prefix='/api/animation')
     app.register_blueprint(admin_routes.bp, url_prefix='/api/admin')
+    app.register_blueprint(image_routes.bp, url_prefix='/api/image')
+    app.register_blueprint(chat_routes.bp, url_prefix='/api/chat')
+    app.register_blueprint(edit_routes.bp, url_prefix='/api/edit')
 
     app.logger.info('All blueprints registered successfully')
 
@@ -202,7 +210,7 @@ app = create_app()
 
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 5000))
+    port = int(os.getenv('PORT', 5001))
     debug = os.getenv('FLASK_ENV', 'development') == 'development'
 
     app.run(

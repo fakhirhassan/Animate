@@ -1,12 +1,13 @@
 """
-Script Processing API Routes (Future Implementation)
-Handles script analysis, scene breakdown, and NLP processing.
+Script Processing API Routes
+Handles scene parsing via Ollama LLM.
 """
 
 import logging
 from flask import Blueprint, request
 
 from utils.response_formatter import success_response, error_response
+from utils.auth import login_required
 
 # Create blueprint
 bp = Blueprint('script', __name__)
@@ -14,16 +15,16 @@ logger = logging.getLogger(__name__)
 
 
 @bp.route('/analyze', methods=['POST'])
+@login_required
 def analyze_script():
     """
-    Analyze a script and extract scenes, characters, and actions.
+    Parse a text description into a structured 3D scene.
 
     Request Body:
-        - script: The animation script text
-        - options: Analysis options (optional)
+        - script: The scene description text
 
     Returns:
-        Analyzed script breakdown with scenes and elements
+        Structured scene JSON with objects, actions, dialogue, music, camera
     """
     try:
         data = request.get_json()
@@ -34,84 +35,41 @@ def analyze_script():
         script_text = data.get('script')
 
         if len(script_text) < 10:
-            return error_response('Script is too short', 400)
+            return error_response('Script is too short (min 10 characters)', 400)
 
-        # TODO: Implement NLP-based script analysis
-        # For now, return placeholder response
+        from services.scene_parser_service import parse_scene
+        scene_data = parse_scene(script_text)
 
         return success_response({
-            'scenes': [
-                {
-                    'id': 1,
-                    'title': 'Opening Scene',
-                    'description': 'Placeholder scene description',
-                    'duration_estimate': '5 seconds',
-                    'elements': {
-                        'characters': ['Character 1'],
-                        'objects': ['Object 1'],
-                        'actions': ['Action 1'],
-                        'emotions': ['neutral']
-                    }
-                }
-            ],
-            'total_scenes': 1,
-            'estimated_duration': '5 seconds',
-            'complexity_score': 0.5
-        }, 'Script analyzed successfully')
+            'scene': scene_data,
+            'object_count': len(scene_data.get('objects', [])),
+            'action_count': len(scene_data.get('actions', [])),
+            'duration': scene_data.get('duration', 0),
+        }, 'Scene parsed successfully')
 
+    except RuntimeError as e:
+        logger.error(f'Scene parser not available: {str(e)}')
+        return error_response(str(e), 503)
+    except ValueError as e:
+        logger.error(f'Failed to parse LLM response: {str(e)}')
+        return error_response(f'Failed to parse scene: {str(e)}', 422)
     except Exception as e:
         logger.error(f'Script analysis error: {str(e)}')
         return error_response('Script analysis failed', 500)
 
 
-@bp.route('/generate-storyboard', methods=['POST'])
-def generate_storyboard():
+@bp.route('/check', methods=['GET'])
+def check_parser():
     """
-    Generate a storyboard from analyzed script.
-
-    Request Body:
-        - script_id: ID of previously analyzed script
-        - style: Visual style preference
+    Check if the scene parser (Ollama) is available.
 
     Returns:
-        Storyboard with scene thumbnails and descriptions
-    """
-    # TODO: Implement storyboard generation
-    return success_response({
-        'storyboard_id': 'sb-placeholder',
-        'frames': [],
-        'status': 'Feature coming soon'
-    }, 'Storyboard generation not yet implemented')
-
-
-@bp.route('/extract-emotions', methods=['POST'])
-def extract_emotions():
-    """
-    Extract emotions and mood from script text.
-
-    Request Body:
-        - text: Text to analyze for emotions
-
-    Returns:
-        Detected emotions with confidence scores
+        Availability status and model info
     """
     try:
-        data = request.get_json()
-
-        if not data or 'text' not in data:
-            return error_response('Text is required', 400)
-
-        # TODO: Implement emotion extraction using NLP
-        return success_response({
-            'emotions': [
-                {'emotion': 'neutral', 'confidence': 0.8},
-                {'emotion': 'happy', 'confidence': 0.1},
-                {'emotion': 'excited', 'confidence': 0.1}
-            ],
-            'dominant_emotion': 'neutral',
-            'mood': 'calm'
-        }, 'Emotions extracted')
-
+        from services.scene_parser_service import check_availability
+        status = check_availability()
+        return success_response(status, 'Parser status retrieved')
     except Exception as e:
-        logger.error(f'Emotion extraction error: {str(e)}')
-        return error_response('Emotion extraction failed', 500)
+        logger.error(f'Parser check error: {str(e)}')
+        return error_response('Failed to check parser status', 500)

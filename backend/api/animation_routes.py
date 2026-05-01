@@ -1,213 +1,331 @@
 """
-Animation Generation API Routes (Future Implementation)
-Handles full animation generation, rendering, and export.
+Animation Generation API Routes
+Text-to-video and full animation pipeline using Wan2.1 + Kokoro TTS.
 """
 
+import os
 import logging
+from typing import Optional
 from flask import Blueprint, request
+from PIL import Image
 
 from utils.response_formatter import success_response, error_response
+from utils.auth import login_required
+from services.conversion_db_service import ConversionDatabaseService
 
-# Create blueprint
 bp = Blueprint('animation', __name__)
 logger = logging.getLogger(__name__)
 
 
-@bp.route('/generate', methods=['POST'])
-def generate_animation():
+_BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _file_size_str(rel_url: str) -> str:
+    """Compute file size for an /uploads/... URL. Returns '' if not found."""
+    try:
+        rel = rel_url.lstrip('/')
+        full = os.path.join(_BACKEND_DIR, rel)
+        if os.path.exists(full):
+            size_bytes = os.path.getsize(full)
+            return f'{size_bytes / (1024 * 1024):.2f} MB'
+    except Exception:
+        pass
+    return ''
+
+
+def _persist_animation(user_id: Optional[str], result: dict, prompt: str, settings: dict) -> None:
+    """Save a generated animation/video to the conversions table.
+
+    Non-fatal: any failure here is logged and swallowed so generation still
+    returns the video URL to the client even if persistence breaks.
     """
-    Generate a complete animation from script and assets.
+    try:
+        if not user_id or not isinstance(result, dict):
+            return
+        video_url = result.get('video_url')
+        if not video_url:
+            return
+        filename = result.get('filename') or os.path.basename(video_url)
+        db_service = ConversionDatabaseService()
+        db_service.save_conversion(user_id, {
+            'type': 'animation',
+            'file_name': filename or 'animation.mp4',
+            'original_image_url': '',
+            'model_url': video_url,
+            'thumbnail_url': video_url,
+            'output_format': 'mp4',
+            'quality': 'medium',
+            'status': 'completed',
+            'file_size': _file_size_str(video_url),
+            'settings': {
+                'prompt': prompt,
+                'duration': result.get('duration'),
+                'fps': result.get('fps'),
+                'num_segments': result.get('num_segments'),
+                **settings,
+            },
+        })
+    except Exception as e:
+        logger.error(f'Animation DB save failed (non-fatal): {e}')
 
-    Request Body:
-        - script: Animation script or scene description
-        - style: Animation style preset
-        - duration: Target duration in seconds
-        - resolution: Output resolution (720p, 1080p, 4k)
-        - fps: Frames per second (24, 30, 60)
 
-    Returns:
-        Animation job ID and status
+@bp.route('/generate', methods=['POST'])
+@login_required
+def generate_full_animation():
+    """
+    Full animation pipeline: text → scene parse → video + voice → stitched output.
+
+    Request Body (JSON):
+        - text: Natural language scene description
+        - num_frames_per_segment: Frames per segment (default 33, use 81 for 5s clips)
+        - num_inference_steps: Quality steps (default 30)
+        - fps: Frames per second (default 16)
+        - voice_preset: Kokoro voice preset (default af_heart)
+        - num_clips: Number of video clips (default 4, more = longer video)
     """
     try:
         data = request.get_json()
+        if not data or not data.get('text'):
+            return error_response('Text description is required', 400)
 
-        if not data:
-            return error_response('Request data is required', 400)
+        from services.animation_pipeline_service import generate_animation
+        result = generate_animation(
+            text=data['text'],
+            num_frames_per_segment=data.get('num_frames_per_segment', 33),
+            num_inference_steps=data.get('num_inference_steps', 30),
+            fps=data.get('fps', 16),
+            voice_preset=data.get('voice_preset', 'af_heart'),
+            num_clips=data.get('num_clips', 4),
+        )
 
-        script = data.get('script')
-        style = data.get('style', 'default')
-        duration = data.get('duration', 30)
-        resolution = data.get('resolution', '1080p')
-        fps = data.get('fps', 30)
-
-        if not script:
-            return error_response('Script is required', 400)
-
-        # TODO: Implement full animation generation pipeline
-        return success_response({
-            'job_id': 'anim-placeholder',
-            'status': 'queued',
-            'estimated_time': duration * 2,  # Rough estimate
-            'settings': {
-                'style': style,
-                'duration': duration,
-                'resolution': resolution,
-                'fps': fps
+        _persist_animation(
+            user_id=getattr(request, 'user_id', None),
+            result=result,
+            prompt=data['text'],
+            settings={
+                'mode': 'single',
+                'voice_preset': data.get('voice_preset', 'af_heart'),
+                'num_clips': data.get('num_clips', 4),
+                'num_frames_per_segment': data.get('num_frames_per_segment', 33),
+                'num_inference_steps': data.get('num_inference_steps', 30),
             },
-            'message': 'Full animation generation coming soon'
-        }, 'Animation generation not yet implemented')
+        )
 
+        return success_response(result, 'Animation generated successfully')
+
+    except RuntimeError as e:
+        logger.error(f'Pipeline runtime error: {e}')
+        return error_response(str(e), 503)
     except Exception as e:
-        logger.error(f'Animation generation error: {str(e)}')
-        return error_response('Animation generation failed', 500)
+        logger.error(f'Pipeline error: {e}')
+        return error_response(f'Animation generation failed: {e}', 500)
 
 
-@bp.route('/styles', methods=['GET'])
-def list_animation_styles():
+@bp.route('/multi-scene', methods=['POST'])
+@login_required
+def generate_multi_scene():
     """
-    List available animation styles.
+    Generate a multi-scene animation from an array of scene descriptions.
 
-    Returns:
-        List of animation style presets
-    """
-    return success_response({
-        'styles': [
-            {
-                'id': 'default',
-                'name': 'Default',
-                'description': 'Clean, modern animation style',
-                'preview_url': None
-            },
-            {
-                'id': 'cartoon',
-                'name': 'Cartoon',
-                'description': '2D cartoon-like animation',
-                'preview_url': None
-            },
-            {
-                'id': 'realistic',
-                'name': 'Realistic',
-                'description': 'Photorealistic 3D animation',
-                'preview_url': None
-            },
-            {
-                'id': 'anime',
-                'name': 'Anime',
-                'description': 'Japanese anime style',
-                'preview_url': None
-            },
-            {
-                'id': 'minimalist',
-                'name': 'Minimalist',
-                'description': 'Simple, clean geometric style',
-                'preview_url': None
-            }
-        ]
-    })
-
-
-@bp.route('/templates', methods=['GET'])
-def list_templates():
-    """
-    List available animation templates.
-
-    Returns:
-        List of pre-made animation templates
-    """
-    return success_response({
-        'templates': [
-            {
-                'id': 'explainer',
-                'name': 'Explainer Video',
-                'description': 'Perfect for product explanations',
-                'duration': 60,
-                'preview_url': None
-            },
-            {
-                'id': 'story',
-                'name': 'Story Animation',
-                'description': 'Narrative-driven animation',
-                'duration': 120,
-                'preview_url': None
-            },
-            {
-                'id': 'social',
-                'name': 'Social Media',
-                'description': 'Short-form social content',
-                'duration': 15,
-                'preview_url': None
-            }
-        ]
-    })
-
-
-@bp.route('/render/<job_id>', methods=['POST'])
-def render_animation(job_id):
-    """
-    Start rendering a completed animation.
-
-    Args:
-        job_id: Animation job ID
-
-    Request Body:
-        - format: Output format (mp4, webm, gif)
-        - quality: Render quality (draft, standard, high)
-
-    Returns:
-        Render job status
+    Request Body (JSON):
+        - scenes: List[str] — one scene description per clip (required)
+        - num_frames_per_scene: int (default 81, ~5s @ 16fps)
+        - num_inference_steps: int (default 30)
+        - fps: int (default 16)
+        - voice_preset: str (default af_heart)
+        - narration: str — optional narration spanning the whole video
     """
     try:
-        data = request.get_json() or {}
-        output_format = data.get('format', 'mp4')
-        quality = data.get('quality', 'standard')
+        data = request.get_json()
+        if not data:
+            return error_response('Request body is required', 400)
+        scenes = data.get('scenes')
+        if not isinstance(scenes, list) or len(scenes) == 0:
+            return error_response('scenes must be a non-empty list', 400)
+        if len(scenes) > 12:
+            return error_response('Maximum 12 scenes per video', 400)
+        scenes = [s.strip() for s in scenes if isinstance(s, str) and s.strip()]
+        if not scenes:
+            return error_response('All scenes are empty', 400)
 
-        # TODO: Implement rendering pipeline
-        return success_response({
-            'render_job_id': f'render-{job_id}',
-            'status': 'queued',
-            'format': output_format,
-            'quality': quality,
-            'message': 'Rendering pipeline coming soon'
-        }, 'Rendering not yet implemented')
+        from services.animation_pipeline_service import generate_multi_scene_animation
+        result = generate_multi_scene_animation(
+            scenes=scenes,
+            num_frames_per_scene=int(data.get('num_frames_per_scene', 81)),
+            num_inference_steps=int(data.get('num_inference_steps', 30)),
+            fps=int(data.get('fps', 16)),
+            voice_preset=data.get('voice_preset', 'af_heart'),
+            narration=data.get('narration', ''),
+        )
 
+        prompt_summary = ' | '.join(f'Scene {i+1}: {s}' for i, s in enumerate(scenes))
+        _persist_animation(
+            user_id=getattr(request, 'user_id', None),
+            result=result,
+            prompt=prompt_summary,
+            settings={
+                'mode': 'multi',
+                'scenes': scenes,
+                'narration': data.get('narration', ''),
+                'voice_preset': data.get('voice_preset', 'af_heart'),
+                'num_frames_per_scene': int(data.get('num_frames_per_scene', 81)),
+                'num_inference_steps': int(data.get('num_inference_steps', 30)),
+            },
+        )
+
+        return success_response(result, 'Multi-scene animation generated successfully')
+
+    except RuntimeError as e:
+        logger.error(f'Multi-scene runtime error: {e}')
+        return error_response(str(e), 503)
     except Exception as e:
-        logger.error(f'Render error: {str(e)}')
-        return error_response('Rendering failed', 500)
+        logger.error(f'Multi-scene error: {e}')
+        return error_response(f'Multi-scene generation failed: {e}', 500)
 
 
-@bp.route('/status/<job_id>', methods=['GET'])
-def get_animation_status(job_id):
+@bp.route('/image-animate', methods=['POST'])
+@login_required
+def animate_image_with_voice():
     """
-    Get the status of an animation job.
+    Image-to-animation with optional voice narration.
 
-    Args:
-        job_id: Animation job ID
-
-    Returns:
-        Job status and progress
+    Request (multipart/form-data):
+        - image: Image file to animate
+        - text: Optional narration/dialogue text
+        - num_frames: Number of frames (default 33)
+        - num_inference_steps: Quality steps (default 30)
+        - fps: Frames per second (default 16)
+        - voice_preset: Kokoro voice preset (default af_heart)
     """
-    # TODO: Implement job status tracking
-    return success_response({
-        'job_id': job_id,
-        'status': 'not_found',
-        'progress': 0,
-        'message': 'Job tracking coming soon'
-    })
+    try:
+        if 'image' not in request.files:
+            return error_response('Image file is required', 400)
+
+        image_file = request.files['image']
+        if image_file.filename == '':
+            return error_response('No image selected', 400)
+
+        image = Image.open(image_file.stream).convert('RGB')
+        text = request.form.get('text', '')
+        num_frames = int(request.form.get('num_frames', 33))
+        num_inference_steps = int(request.form.get('num_inference_steps', 30))
+        fps = int(request.form.get('fps', 16))
+        voice_preset = request.form.get('voice_preset', 'af_heart')
+
+        from services.animation_pipeline_service import generate_animation_from_image
+        result = generate_animation_from_image(
+            image=image,
+            text=text,
+            num_frames=num_frames,
+            num_inference_steps=num_inference_steps,
+            fps=fps,
+            voice_preset=voice_preset,
+        )
+
+        _persist_animation(
+            user_id=getattr(request, 'user_id', None),
+            result=result,
+            prompt=text or f'Image animation: {image_file.filename}',
+            settings={
+                'mode': 'image-animate',
+                'source_image': image_file.filename,
+                'voice_preset': voice_preset,
+                'num_frames': num_frames,
+                'num_inference_steps': num_inference_steps,
+            },
+        )
+
+        return success_response(result, 'Image animation generated successfully')
+
+    except RuntimeError as e:
+        logger.error(f'Image animation runtime error: {e}')
+        return error_response(str(e), 503)
+    except Exception as e:
+        logger.error(f'Image animation error: {e}')
+        return error_response(f'Image animation failed: {e}', 500)
 
 
-@bp.route('/export/<job_id>', methods=['GET'])
-def export_animation(job_id):
+@bp.route('/text-to-video', methods=['POST'])
+@login_required
+def text_to_video():
     """
-    Export a completed animation.
+    Generate a single video clip from a text prompt.
 
-    Args:
-        job_id: Animation job ID
-
-    Query Parameters:
-        - format: Export format
-
-    Returns:
-        Animation file download
+    Request Body (JSON):
+        - prompt: Text description of the video
+        - num_frames: Number of frames (default 33, ~2s at 16fps)
+        - num_inference_steps: Quality steps (default 30)
+        - fps: Frames per second (default 16)
+        - height: Video height (default 480)
+        - width: Video width (default 832)
+        - seed: Random seed (optional)
     """
-    # TODO: Implement export functionality
-    return error_response('Export functionality coming soon', 501)
+    try:
+        data = request.get_json()
+        if not data or not data.get('prompt'):
+            return error_response('Prompt is required', 400)
+
+        from services.video_generation_service import generate_video_from_text
+        result = generate_video_from_text(
+            prompt=data['prompt'],
+            num_frames=data.get('num_frames', 33),
+            num_inference_steps=data.get('num_inference_steps', 30),
+            fps=data.get('fps', 16),
+            height=data.get('height', 480),
+            width=data.get('width', 832),
+            seed=data.get('seed'),
+        )
+
+        # The single-clip endpoint returns `video_url` too; normalize for persistence.
+        if isinstance(result, dict) and 'video_url' not in result:
+            filepath = result.get('filepath', '')
+            if filepath:
+                result['video_url'] = '/uploads/output/animations/' + os.path.basename(filepath)
+
+        _persist_animation(
+            user_id=getattr(request, 'user_id', None),
+            result=result,
+            prompt=data['prompt'],
+            settings={
+                'mode': 'text-to-video',
+                'num_frames': data.get('num_frames', 33),
+                'num_inference_steps': data.get('num_inference_steps', 30),
+                'height': data.get('height', 480),
+                'width': data.get('width', 832),
+            },
+        )
+
+        return success_response(result, 'Video generated successfully')
+
+    except RuntimeError as e:
+        logger.error(f'T2V runtime error: {e}')
+        return error_response(str(e), 503)
+    except Exception as e:
+        logger.error(f'T2V error: {e}')
+        return error_response(f'Video generation failed: {e}', 500)
+
+
+@bp.route('/check', methods=['GET'])
+def check_generator():
+    """Check if the video generator is available."""
+    try:
+        from services.video_generation_service import check_availability
+        status = check_availability()
+        return success_response(status, 'Generator status retrieved')
+    except Exception as e:
+        logger.error(f'Generator check error: {e}')
+        return error_response('Failed to check generator status', 500)
+
+
+@bp.route('/unload', methods=['POST'])
+def unload_model():
+    """Unload video and voice models to free GPU memory."""
+    try:
+        from services.video_generation_service import unload_model as unload_video
+        from services.voice_generation_service import unload_model as unload_voice
+        unload_video()
+        unload_voice()
+        return success_response({'message': 'Models unloaded'}, 'Models unloaded successfully')
+    except Exception as e:
+        logger.error(f'Unload error: {e}')
+        return error_response('Failed to unload models', 500)

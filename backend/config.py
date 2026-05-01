@@ -47,8 +47,29 @@ class Config:
     AWS_S3_REGION = os.getenv('AWS_S3_REGION', 'us-east-1')
 
     # Processing settings
-    MAX_PROCESSING_TIME = 300  # 5 minutes max processing time
+    MAX_PROCESSING_TIME = 600  # 10 minutes max processing time (video gen is slow)
     ENABLE_GPU = os.getenv('ENABLE_GPU', 'true').lower() == 'true'
+
+    # RunPod Cloud GPU settings
+    # Set GPU_MODE to 'cloud' to use RunPod, 'local' for local GPU, 'auto' tries local first
+    GPU_MODE = os.getenv('GPU_MODE', 'auto')  # 'local', 'cloud', 'auto'
+    RUNPOD_API_KEY = os.getenv('RUNPOD_API_KEY', '')
+    RUNPOD_ENDPOINT_ID = os.getenv('RUNPOD_ENDPOINT_ID', '')
+    RUNPOD_T2I_ENDPOINT_ID = os.getenv('RUNPOD_T2I_ENDPOINT_ID', '')
+    # 3D endpoint (TRELLIS). Falls back to RUNPOD_ENDPOINT_ID if unset.
+    RUNPOD_3D_ENDPOINT_ID = os.getenv('RUNPOD_3D_ENDPOINT_ID', '')
+
+    # Animation pipeline settings
+    VIDEO_MODEL = os.getenv('VIDEO_MODEL', '1.3b')
+    DEFAULT_VOICE = os.getenv('DEFAULT_VOICE', 'af_heart')
+    DEFAULT_NUM_CLIPS = int(os.getenv('DEFAULT_NUM_CLIPS', '4'))
+    # RTX A4000: 81 frames = 5s clips at 16fps (was 33=2s on Mac, GPU is much faster)
+    DEFAULT_FRAMES_PER_CLIP = int(os.getenv('DEFAULT_FRAMES_PER_CLIP', '81'))
+    # RTX A4000: use standard 480p (832x480) — was cramped 448x256 on Mac
+    DEFAULT_VIDEO_WIDTH = int(os.getenv('DEFAULT_VIDEO_WIDTH', '832'))
+    DEFAULT_VIDEO_HEIGHT = int(os.getenv('DEFAULT_VIDEO_HEIGHT', '480'))
+    # RTX A4000: more inference steps = better quality (faster than Mac)
+    DEFAULT_INFERENCE_STEPS = int(os.getenv('DEFAULT_INFERENCE_STEPS', '30'))
 
 
 class DevelopmentConfig(Config):

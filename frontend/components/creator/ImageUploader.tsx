@@ -97,7 +97,7 @@ export default function ImageUploader({
     <div className="space-y-4">
       {/* Dropzone */}
       <motion.div
-        {...getRootProps()}
+        {...(getRootProps() as any)}
         className={`
           relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer
           transition-all duration-200

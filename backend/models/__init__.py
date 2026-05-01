@@ -1,6 +1,6 @@
 """
 AI Models Package
-Contains all AI model implementations for AniMate.
+Contains all AI model implementations for Mesh.
 """
 
 from .two_d_to_three_d import TwoDToThreeDConverter

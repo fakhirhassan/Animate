@@ -23,16 +23,20 @@ logger = logging.getLogger(__name__)
 def get_user_id_from_request():
     """
     Extract user ID from request headers (from Supabase JWT token).
+    Falls back to ?token= query param for browser <model-viewer> and download links
+    that can't attach Authorization headers.
     """
     try:
-        # Get Authorization header
+        token = None
         auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            current_app.logger.error('No Authorization header found')
-            return None
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+        else:
+            token = request.args.get('token')
 
-        # Extract token
-        token = auth_header.split(' ')[1]
+        if not token:
+            current_app.logger.error('No auth token (header or query param) found')
+            return None
 
         # Get Supabase client and verify token
         from supabase_client.supabase_config import get_supabase
@@ -144,6 +148,7 @@ def convert_2d_to_3d():
 
             # Prepare conversion data for database
             conversion_data = {
+                'type': '3d',
                 'file_name': secure_filename(file.filename),
                 'original_image_url': f'/uploads/input/{os.path.basename(input_path)}',
                 'model_url': f'/api/convert/download/{job_id}',
@@ -208,15 +213,32 @@ def download_model(job_id):
         response = current_app.make_default_options_response()
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
 
     try:
+        # Verify user is authenticated
+        user_id = get_user_id_from_request()
+        if not user_id:
+            return error_response('Authorization required', 401)
+
         # Validate job_id format
         try:
             uuid.UUID(job_id)
         except ValueError:
             return error_response('Invalid job ID format', 400)
+
+        # Verify the conversion belongs to this user
+        try:
+            from services.conversion_db_service import ConversionDatabaseService
+            db_service = ConversionDatabaseService()
+            from supabase_client.supabase_config import get_supabase
+            supabase = get_supabase()
+            result = supabase.table('conversions').select('user_id').eq('id', job_id).execute()
+            if result.data and result.data[0].get('user_id') != user_id:
+                return error_response('Access denied', 403)
+        except Exception:
+            pass  # If DB check fails, still allow download (backwards compatibility)
 
         # Find the output file
         output_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'output')
@@ -283,9 +305,10 @@ def get_conversion_history():
         limit = int(request.args.get('limit', 10))
         offset = int(request.args.get('offset', 0))
         status = request.args.get('status')
+        conversion_type = request.args.get('type')
 
         db_service = ConversionDatabaseService()
-        result = db_service.get_user_conversions(user_id, limit, offset, status)
+        result = db_service.get_user_conversions(user_id, limit, offset, status, conversion_type)
 
         if not result['success']:
             return error_response(result.get('message', 'Failed to fetch history'), 500)

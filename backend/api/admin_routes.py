@@ -239,6 +239,73 @@ def get_conversion_activity():
         return error_response('Failed to fetch conversion activity', 500)
 
 
+@bp.route('/analytics/role-distribution', methods=['GET'])
+@admin_required
+def get_role_distribution():
+    try:
+        result = AdminStatsService().get_role_distribution()
+        if not result['success']:
+            return error_response(result.get('message', 'Failed'), 500)
+        return success_response(result['data'])
+    except Exception as e:
+        logger.error(f'Role distribution error: {e}')
+        return error_response('Failed to fetch role distribution', 500)
+
+
+@bp.route('/analytics/conversion-status', methods=['GET'])
+@admin_required
+def get_conversion_status():
+    try:
+        result = AdminStatsService().get_conversion_status_breakdown()
+        if not result['success']:
+            return error_response(result.get('message', 'Failed'), 500)
+        return success_response(result['data'])
+    except Exception as e:
+        logger.error(f'Conversion status error: {e}')
+        return error_response('Failed to fetch conversion status', 500)
+
+
+@bp.route('/analytics/top-creators', methods=['GET'])
+@admin_required
+def get_top_creators():
+    try:
+        limit = request.args.get('limit', 5, type=int)
+        result = AdminStatsService().get_top_creators(limit)
+        if not result['success']:
+            return error_response(result.get('message', 'Failed'), 500)
+        return success_response(result['data'])
+    except Exception as e:
+        logger.error(f'Top creators error: {e}')
+        return error_response('Failed to fetch top creators', 500)
+
+
+@bp.route('/analytics/heatmap', methods=['GET'])
+@admin_required
+def get_heatmap():
+    try:
+        days = request.args.get('days', 7, type=int)
+        result = AdminStatsService().get_hourly_heatmap(days)
+        if not result['success']:
+            return error_response(result.get('message', 'Failed'), 500)
+        return success_response(result['data'])
+    except Exception as e:
+        logger.error(f'Heatmap error: {e}')
+        return error_response('Failed to fetch heatmap', 500)
+
+
+@bp.route('/analytics/overview', methods=['GET'])
+@admin_required
+def get_overview():
+    try:
+        result = AdminStatsService().get_overview_metrics()
+        if not result['success']:
+            return error_response(result.get('message', 'Failed'), 500)
+        return success_response(result['data'])
+    except Exception as e:
+        logger.error(f'Overview error: {e}')
+        return error_response('Failed to fetch overview', 500)
+
+
 @bp.route('/activities', methods=['GET'])
 @admin_required
 def get_recent_activities():

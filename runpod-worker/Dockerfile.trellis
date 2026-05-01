@@ -1,0 +1,107 @@
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+
+WORKDIR /
+
+# System deps — OpenGL for rasterization, build tools for native extensions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git build-essential cmake ninja-build \
+    libgl1 libglib2.0-0 libegl1 libxrender1 libxi6 \
+    libgles2-mesa-dev \
+    libjpeg-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Remove distutils-installed blinker so pip can upgrade it cleanly
+RUN apt-get purge -y python3-blinker || true
+RUN rm -rf /usr/lib/python3/dist-packages/blinker* || true
+
+# --- TRELLIS BASIC deps (matches official setup.sh --basic) ---
+# --ignore-installed blinker: bypass the distutils-installed system package
+RUN pip install --no-cache-dir --timeout=600 --ignore-installed blinker \
+    runpod>=1.7.0 \
+    huggingface_hub==0.25.2 \
+    safetensors==0.4.5 \
+    accelerate==0.34.2 \
+    transformers==4.45.2 \
+    diffusers==0.30.3 \
+    einops \
+    omegaconf \
+    sentencepiece \
+    ftfy \
+    pillow \
+    imageio \
+    imageio-ffmpeg \
+    tqdm \
+    easydict \
+    opencv-python-headless \
+    scipy \
+    ninja \
+    rembg \
+    onnxruntime \
+    trimesh \
+    open3d \
+    xatlas \
+    pyvista \
+    pymeshfix \
+    igraph \
+    pygltflib \
+    plyfile \
+    scikit-image
+
+# utils3d — TRELLIS pins a specific commit
+RUN pip install --no-cache-dir --timeout=600 \
+    "git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8"
+
+# --- Attention backend: xformers for torch 2.4.0 ---
+# TRELLIS's setup.sh doesn't have a direct cu124 case for torch 2.4.0, but the
+# cu121 wheel of xformers==0.0.27.post2 is ABI-compatible with cu124 runtime.
+RUN pip install --no-cache-dir --timeout=600 \
+    xformers==0.0.27.post2 --index-url https://download.pytorch.org/whl/cu121 \
+    || pip install --no-cache-dir --timeout=600 xformers==0.0.27.post2 \
+    || echo "xformers install failed"
+
+# --- Sparse conv: spconv for cuda 12.x ---
+RUN pip install --no-cache-dir --timeout=600 spconv-cu120
+
+# --- Rendering stack (kaolin + nvdiffrast + diffoctreerast + mip-splatting) ---
+# kaolin: prebuilt wheel for torch 2.4.0 + cu121 (runtime-compat with cu124)
+RUN pip install --no-cache-dir --timeout=900 kaolin \
+    -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html \
+    || echo "kaolin install failed"
+
+# nvdiffrast — used for mesh rendering during GLB export.
+# Building on Mac/no-GPU hosts requires explicit arch list + FORCE_CUDA + no build isolation.
+ENV TORCH_CUDA_ARCH_LIST="7.0;7.5;8.0;8.6;8.9;9.0+PTX"
+ENV FORCE_CUDA=1
+ENV MAX_JOBS=2
+RUN pip install --no-cache-dir --no-build-isolation --timeout=1800 \
+    git+https://github.com/NVlabs/nvdiffrast.git
+
+# diffoctreerast — sparse octree rasterizer (only used by OctreeRenderer; lazy-loaded).
+# Same CUDA build env as nvdiffrast; allow failure since image-to-3D doesn't strictly need it.
+RUN pip install --no-cache-dir --no-build-isolation --timeout=900 \
+    git+https://github.com/JeffreyXiang/diffoctreerast.git \
+    || echo "diffoctreerast build skipped"
+
+# diff_gaussian_rasterization (mip-splatting variant) — REQUIRED by gaussian_render.py
+# during GLB texture baking. TRELLIS uses the mip-splatting fork.
+RUN pip install --no-cache-dir --no-build-isolation --timeout=1800 \
+    git+https://github.com/autonomousvision/mip-splatting.git#subdirectory=submodules/diff-gaussian-rasterization
+
+# --- Clone TRELLIS + the FlexiCubes submodule it depends on ---
+RUN git clone --depth 1 --recurse-submodules --shallow-submodules \
+    https://github.com/microsoft/TRELLIS /opt/TRELLIS
+WORKDIR /opt/TRELLIS
+
+# Install TRELLIS itself (--no-deps so we don't clobber our pins)
+RUN pip install --no-cache-dir --no-deps -e . || true
+
+ENV PYTHONPATH=/opt/TRELLIS
+ENV ATTN_BACKEND=xformers
+ENV SPCONV_ALGO=native
+
+WORKDIR /
+
+# Models download on first run to /runpod-volume/models (attach Network Volume!)
+COPY runpod-worker/handler_trellis.py /handler.py
+
+CMD ["python", "-u", "/handler.py"]

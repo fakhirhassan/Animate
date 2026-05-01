@@ -1,38 +1,46 @@
 'use client';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Box,
   Download,
   Eye,
   Trash2,
-  Filter,
   Search,
   Grid3x3,
   List,
   Loader2,
+  ImageIcon,
+  Film,
+  Play,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { conversionAPI } from '@/lib/api';
+import { withAuth } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 
-// Dynamically import ModelViewer to disable SSR
 const ModelViewer = dynamic(() => import('@/components/creator/ModelViewer'), {
   ssr: false,
   loading: () => (
-    <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg overflow-hidden border border-gray-200 relative flex items-center justify-center">
-      <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+    <div className="aspect-square bg-surface-high rounded-lg overflow-hidden border border-border relative flex items-center justify-center">
+      <Loader2 className="h-12 w-12 text-primary animate-spin" />
     </div>
   ),
 });
 
-interface Asset {
+type AssetType = 'all' | '3d' | 'images' | 'videos';
+type ViewMode = 'grid' | 'list';
+
+interface Model3D {
+  kind: '3d';
   id: string;
   file_name: string;
-  original_image_url: string;
   thumbnail_url: string;
   model_url: string;
   output_format: string;
@@ -41,121 +49,157 @@ interface Asset {
   created_at: string;
 }
 
-type ViewMode = 'grid' | 'list';
+interface ImageAsset {
+  kind: 'image';
+  id: string;
+  url: string;
+  prompt: string;
+  createdAt: string;
+}
+
+interface VideoAsset {
+  kind: 'video';
+  id: string;
+  url: string;
+  prompt: string;
+  filename: string;
+  duration: string;
+  createdAt: string;
+}
+
+type Asset = Model3D | ImageAsset | VideoAsset;
+
+const TYPE_FILTERS: { value: AssetType; label: string; icon: React.ReactNode }[] = [
+  { value: 'all', label: 'All', icon: <Grid3x3 className="h-3.5 w-3.5" /> },
+  { value: '3d', label: '3D Models', icon: <Box className="h-3.5 w-3.5" /> },
+  { value: 'images', label: 'Images', icon: <ImageIcon className="h-3.5 w-3.5" /> },
+  { value: 'videos', label: 'Videos', icon: <Film className="h-3.5 w-3.5" /> },
+];
 
 export default function AssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [models, setModels] = useState<Model3D[]>([]);
+  const [images, setImages] = useState<ImageAsset[]>([]);
+  const [videos, setVideos] = useState<VideoAsset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterFormat, setFilterFormat] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<AssetType>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-  const [isViewingModel, setIsViewingModel] = useState(false);
+  const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
 
-  // Load assets from database
-  useEffect(() => {
-    fetchAssets();
-  }, []);
+  useEffect(() => { loadAll(); }, []);
 
-  const fetchAssets = async () => {
+  const loadAll = async () => {
+    setIsLoading(true);
+
     try {
-      const response = await conversionAPI.getHistory({ limit: 50 });
-      const conversions = response.data.data.conversions || [];
-      setAssets(conversions);
-    } catch (error) {
-      console.error('Failed to load assets:', error);
-    } finally {
-      setIsLoading(false);
+      // Single backend call returns all types — split client-side by `type`.
+      const response = await conversionAPI.getHistory({ limit: 200 });
+      const conversions: any[] = response?.data?.data?.conversions || [];
+
+      const m: Model3D[] = [];
+      const imgs: ImageAsset[] = [];
+      const vids: VideoAsset[] = [];
+
+      for (const c of conversions) {
+        if (c.type === 'image') {
+          imgs.push({
+            kind: 'image',
+            id: c.id,
+            url: c.model_url?.startsWith('http') ? c.model_url : `${BACKEND_URL}${c.model_url}`,
+            prompt: c.settings?.prompt || c.file_name || 'Untitled',
+            createdAt: c.created_at,
+          });
+        } else if (c.type === 'animation') {
+          vids.push({
+            kind: 'video',
+            id: c.id,
+            url: c.model_url?.startsWith('http') ? c.model_url : `${BACKEND_URL}${c.model_url}`,
+            prompt: c.settings?.prompt || c.file_name || 'Untitled',
+            filename: c.file_name || 'animation.mp4',
+            duration: c.settings?.duration ? `${c.settings.duration}s` : '',
+            createdAt: c.created_at,
+          });
+        } else {
+          // type === '3d' (default)
+          m.push({ kind: '3d', ...c });
+        }
+      }
+
+      setModels(m);
+      setImages(imgs);
+      setVideos(vids);
+    } catch {
+      setModels([]);
+      setImages([]);
+      setVideos([]);
     }
+
+    setIsLoading(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this model?')) return;
+  const allAssets: Asset[] = [...models, ...images, ...videos].sort((a, b) => {
+    const dateA = a.kind === '3d' ? a.created_at : a.createdAt;
+    const dateB = b.kind === '3d' ? b.created_at : b.createdAt;
+    return new Date(dateB).getTime() - new Date(dateA).getTime();
+  });
 
+  const filtered = allAssets.filter((asset) => {
+    const matchesType =
+      typeFilter === 'all' ||
+      (typeFilter === '3d' && asset.kind === '3d') ||
+      (typeFilter === 'images' && asset.kind === 'image') ||
+      (typeFilter === 'videos' && asset.kind === 'video');
+    const name = asset.kind === '3d' ? asset.file_name : asset.prompt;
+    return matchesType && name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  const counts = { all: allAssets.length, '3d': models.length, images: images.length, videos: videos.length };
+
+  const handleDelete = async (asset: Asset) => {
+    if (!confirm('Delete this asset?')) return;
     try {
-      await conversionAPI.deleteConversion(id);
-      setAssets((prev) => prev.filter((asset) => asset.id !== id));
-
-      // Close viewer if viewing the deleted asset
-      if (selectedAsset?.id === id) {
-        setIsViewingModel(false);
-        setSelectedAsset(null);
-      }
-    } catch (error) {
-      console.error('Failed to delete asset:', error);
-      alert('Failed to delete asset. Please try again.');
+      await conversionAPI.deleteConversion(asset.id);
+      if (asset.kind === '3d') setModels(prev => prev.filter(m => m.id !== asset.id));
+      else if (asset.kind === 'image') setImages(prev => prev.filter(i => i.id !== asset.id));
+      else setVideos(prev => prev.filter(v => v.id !== asset.id));
+    } catch {
+      alert('Failed to delete asset');
+      return;
     }
+    if (previewAsset?.id === asset.id) setPreviewAsset(null);
   };
 
   const handleDownload = (asset: Asset) => {
-    const downloadUrl = `http://localhost:5001${asset.model_url}?download=true`;
-    window.open(downloadUrl, '_blank');
+    const url = asset.kind === '3d' ? withAuth(`${BACKEND_URL}${asset.model_url}?download=true`) : asset.url;
+    const filename = asset.kind === '3d' ? asset.file_name : asset.kind === 'video' ? asset.filename : `image_${Date.now()}.png`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
   };
 
-  const handleView = (asset: Asset) => {
-    setSelectedAsset(asset);
-    setIsViewingModel(true);
-  };
-
-  // Filter assets
-  const filteredAssets = assets.filter((asset) => {
-    const matchesSearch = asset.file_name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFormat = filterFormat === 'all' || asset.output_format === filterFormat;
-    return matchesSearch && matchesFormat;
-  });
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const getLabel = (a: Asset) => a.kind === '3d' ? a.file_name : a.prompt;
+  const getDate = (a: Asset) => a.kind === '3d' ? a.created_at : a.createdAt;
 
   return (
-    <div className="min-h-screen bg-[#0a0a1f] p-6 lg:p-8 pt-6 lg:pt-8 relative overflow-hidden">
-      {/* Animated Grid Background */}
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#1a1a3e_1px,transparent_1px),linear-gradient(to_bottom,#1a1a3e_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
-
-      {/* Animated Background Blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
-      </div>
-
-      <div className="max-w-7xl mx-auto relative z-10">
+    <div className="min-h-screen bg-background px-8 py-8 relative">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-                <Box className="h-8 w-8 text-blue-400" />
-                3D Assets
+              <h1 className="text-4xl font-headline font-black tracking-tight text-foreground uppercase flex items-center gap-3">
+                <Grid3x3 className="h-8 w-8 text-accent" />
+                My <span className="text-accent">Assets</span>
               </h1>
-              <p className="text-gray-400">
-                View and manage your converted 3D models
-              </p>
+              <p className="text-muted mt-2">All your generated 3D models, images, and videos in one place</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className={viewMode === 'grid' ? 'bg-gradient-to-r from-blue-500 to-emerald-500' : 'border-white/20 text-white hover:bg-white/10'}
-              >
+              <Button variant={viewMode === 'grid' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('grid')}>
                 <Grid3x3 className="h-4 w-4" />
               </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className={viewMode === 'list' ? 'bg-gradient-to-r from-blue-500 to-emerald-500' : 'border-white/20 text-white hover:bg-white/10'}
-              >
+              <Button variant={viewMode === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('list')}>
                 <List className="h-4 w-4" />
               </Button>
             </div>
@@ -163,274 +207,251 @@ export default function AssetsPage() {
         </motion.div>
 
         {/* Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-6 mb-8"
-        >
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search models..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 border-white/10 bg-white/5 text-white placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 rounded-xl"
-              />
-            </div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+          className="bg-surface border border-border rounded-lg p-6 mb-8 bloom-shadow">
 
-            {/* Format Filter */}
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-gray-400" />
-              <select
-                value={filterFormat}
-                onChange={(e) => setFilterFormat(e.target.value)}
-                className="bg-white/5 border border-white/10 text-white rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          {/* Type tabs */}
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {TYPE_FILTERS.map(({ value, label, icon }) => (
+              <button
+                key={value}
+                onClick={() => setTypeFilter(value)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-label uppercase tracking-widest transition-all ${
+                  typeFilter === value
+                    ? 'bg-primary/20 text-primary border border-primary/50'
+                    : 'bg-surface-high text-muted border border-border hover:border-primary/30'
+                }`}
               >
-                <option value="all">All Formats</option>
-                <option value="obj">OBJ</option>
-                <option value="glb">GLB</option>
-                <option value="gltf">GLTF</option>
-              </select>
-            </div>
+                {icon}
+                {label}
+                <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  typeFilter === value ? 'bg-primary/30 text-primary' : 'bg-border text-muted'
+                }`}>
+                  {counts[value]}
+                </span>
+              </button>
+            ))}
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center gap-6 mt-4 text-sm text-gray-400">
-            <span>{filteredAssets.length} models found</span>
-            {filterFormat !== 'all' && (
-              <Badge className="bg-blue-500/20 text-blue-400 border-0">
-                Filtered by {filterFormat.toUpperCase()}
-              </Badge>
-            )}
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+            <Input
+              placeholder="Search by name or prompt..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
           </div>
+          <p className="text-[10px] font-label uppercase tracking-widest text-muted mt-3">
+            {filtered.length} asset{filtered.length !== 1 ? 's' : ''} found
+          </p>
         </motion.div>
 
-        {/* Assets Grid/List */}
+        {/* Assets */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+            <Loader2 className="h-12 w-12 text-primary animate-spin" />
           </div>
-        ) : filteredAssets.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="text-center py-20">
-            <Box className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-gray-300 font-medium text-lg">No 3D models found</h3>
-            <p className="text-gray-400 mt-2">
-              {searchQuery || filterFormat !== 'all'
-                ? 'Try adjusting your search or filters'
-                : 'Start by converting some 2D images to 3D models'}
+            <Grid3x3 className="h-16 w-16 text-muted mx-auto mb-4" />
+            <h3 className="text-foreground font-headline font-bold text-lg uppercase tracking-tight">No assets found</h3>
+            <p className="text-muted mt-2">
+              {searchQuery ? 'Try adjusting your search' : 'Generate some content to see it here'}
             </p>
           </div>
         ) : viewMode === 'grid' ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-          >
-            {filteredAssets.map((asset, index) => (
-              <motion.div
-                key={asset.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="group relative bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 overflow-hidden hover:shadow-lg hover:border-white/30 transition-all duration-200"
-              >
-                {/* Thumbnail */}
-                <div className="aspect-square relative overflow-hidden bg-gray-900">
-                  <img
-                    src={`http://localhost:5001${asset.thumbnail_url}`}
-                    alt={asset.file_name}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-
-                  {/* Hover Overlay */}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleView(asset)}
-                      className="h-10 w-10 p-0 bg-white/20 hover:bg-white/30 text-white rounded-full"
-                    >
-                      <Eye className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDownload(asset)}
-                      className="h-10 w-10 p-0 bg-white/20 hover:bg-white/30 text-white rounded-full"
-                    >
-                      <Download className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(asset.id)}
-                      className="h-10 w-10 p-0 bg-red-500/80 hover:bg-red-600/80 text-white rounded-full"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </Button>
-                  </div>
-
-                  {/* Format Badge */}
-                  <div className="absolute top-2 right-2">
-                    <Badge className="bg-black/70 text-white text-xs border-0 uppercase">
-                      {asset.output_format}
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* Info */}
-                <div className="p-4 space-y-2">
-                  <h4 className="font-medium text-white truncate">
-                    {asset.file_name}
-                  </h4>
-
-                  <div className="flex items-center justify-between text-xs text-gray-400">
-                    <span>{formatDate(asset.created_at)}</span>
-                    <Badge className="bg-emerald-500/20 text-emerald-400 border-0 text-xs capitalize">
-                      {asset.quality}
-                    </Badge>
-                  </div>
-
-                  <div className="text-xs text-gray-400">
-                    {asset.file_size}
-                  </div>
-                </div>
-              </motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filtered.map((asset, index) => (
+              <AssetCard key={asset.id} asset={asset} index={index}
+                onView={() => setPreviewAsset(asset)}
+                onDownload={() => handleDownload(asset)}
+                onDelete={() => handleDelete(asset)}
+                formatDate={formatDate} getLabel={getLabel} getDate={getDate}
+              />
             ))}
           </motion.div>
         ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="space-y-4"
-          >
-            {filteredAssets.map((asset, index) => (
-              <motion.div
-                key={asset.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.03 }}
-                className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-4 hover:shadow-lg hover:border-white/30 transition-all duration-200"
-              >
-                <div className="flex items-center gap-4">
-                  {/* Thumbnail */}
-                  <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-900 flex-shrink-0">
-                    <img
-                      src={`http://localhost:5001${asset.thumbnail_url}`}
-                      alt={asset.file_name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-white truncate mb-1">
-                      {asset.file_name}
-                    </h4>
-                    <div className="flex items-center gap-4 text-sm text-gray-400">
-                      <span>{formatDate(asset.created_at)}</span>
-                      <Badge className="bg-black/70 text-white text-xs border-0 uppercase">
-                        {asset.output_format}
-                      </Badge>
-                      <Badge className="bg-emerald-500/20 text-emerald-400 border-0 text-xs capitalize">
-                        {asset.quality}
-                      </Badge>
-                      <span>{asset.file_size}</span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleView(asset)}
-                      className="bg-white/10 hover:bg-white/20 text-white rounded-lg"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDownload(asset)}
-                      className="bg-white/10 hover:bg-white/20 text-white rounded-lg"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(asset.id)}
-                      className="bg-red-500/80 hover:bg-red-600/80 text-white rounded-lg"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="space-y-4">
+            {filtered.map((asset, index) => (
+              <AssetRow key={asset.id} asset={asset} index={index}
+                onView={() => setPreviewAsset(asset)}
+                onDownload={() => handleDownload(asset)}
+                onDelete={() => handleDelete(asset)}
+                formatDate={formatDate} getLabel={getLabel} getDate={getDate}
+              />
             ))}
           </motion.div>
         )}
+      </div>
 
-        {/* Model Viewer Modal */}
-        {isViewingModel && selectedAsset && (
-          <div
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => setIsViewingModel(false)}
-          >
+      {/* Preview Modal */}
+      <AnimatePresence>
+        {previewAsset && (
+          <div className="fixed inset-0 z-50 bg-void-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setPreviewAsset(null)}>
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-6 max-w-4xl w-full"
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-surface border-2 border-accent/30 rounded-lg p-6 max-w-4xl w-full bloom-shadow"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-white font-semibold text-lg">
-                  {selectedAsset.file_name}
+                <h3 className="font-headline text-lg font-bold text-foreground uppercase tracking-tight truncate pr-4">
+                  {getLabel(previewAsset)}
                 </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsViewingModel(false)}
-                  className="text-white hover:bg-white/20"
-                >
-                  Close
+                <Button variant="ghost" size="sm" onClick={() => setPreviewAsset(null)}>
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
 
-              <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg overflow-hidden">
-                <ModelViewer
-                  modelUrl={`http://localhost:5001${selectedAsset.model_url}`}
-                />
-              </div>
+              {previewAsset.kind === '3d' && (
+                <div className="aspect-square bg-surface-high rounded-lg overflow-hidden border border-border">
+                  <ModelViewer modelUrl={withAuth(`${BACKEND_URL}${previewAsset.model_url}`)} />
+                </div>
+              )}
+              {previewAsset.kind === 'image' && (
+                <img src={previewAsset.url} alt={previewAsset.prompt}
+                  className="w-full rounded-xl max-h-[70vh] object-contain" />
+              )}
+              {previewAsset.kind === 'video' && (
+                <video src={previewAsset.url} controls autoPlay
+                  className="w-full rounded-xl max-h-[70vh]" />
+              )}
 
               <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-3 text-sm text-gray-400">
-                  <Badge className="bg-black/70 text-white text-xs border-0 uppercase">
-                    {selectedAsset.output_format}
-                  </Badge>
-                  <span>{selectedAsset.file_size}</span>
-                  <span>{formatDate(selectedAsset.created_at)}</span>
+                <p className="text-xs text-muted font-label">{formatDate(getDate(previewAsset))}</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => handleDelete(previewAsset)} className="text-destructive hover:bg-destructive/10">
+                    <Trash2 className="h-4 w-4 mr-2" />Delete
+                  </Button>
+                  <Button onClick={() => handleDownload(previewAsset)}>
+                    <Download className="h-4 w-4 mr-2" />Download
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => handleDownload(selectedAsset)}
-                  className="bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Model
-                </Button>
               </div>
             </motion.div>
           </div>
         )}
-      </div>
+      </AnimatePresence>
     </div>
+  );
+}
+
+function AssetTypeBadge({ kind }: { kind: string }) {
+  const map: Record<string, { label: string; variant: 'default' | 'info' | 'admin' }> = {
+    '3d': { label: '3D', variant: 'default' },
+    image: { label: 'Image', variant: 'info' },
+    video: { label: 'Video', variant: 'admin' },
+  };
+  const { label, variant } = map[kind] || { label: kind, variant: 'default' as const };
+  return <Badge variant={variant}>{label}</Badge>;
+}
+
+function AssetThumbnail({ asset }: { asset: Asset }) {
+  if (asset.kind === '3d') {
+    return (
+      <img src={`${BACKEND_URL}${asset.thumbnail_url}`} alt={asset.file_name}
+        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+    );
+  }
+  if (asset.kind === 'image') {
+    return (
+      <img src={asset.url} alt={asset.prompt}
+        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+    );
+  }
+  return (
+    <div className="relative w-full h-full bg-void-black flex items-center justify-center">
+      <video src={asset.url} className="w-full h-full object-cover opacity-60" muted />
+      <Play className="absolute h-8 w-8 text-white opacity-80" />
+    </div>
+  );
+}
+
+function AssetCard({ asset, index, onView, onDownload, onDelete, formatDate, getLabel, getDate }: {
+  asset: Asset; index: number;
+  onView: () => void; onDownload: () => void; onDelete: () => void;
+  formatDate: (d: string) => string;
+  getLabel: (a: Asset) => string;
+  getDate: (a: Asset) => string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04 }}
+      whileHover={{ scale: 1.03 }}
+      className="group relative bg-surface border border-border rounded-lg overflow-hidden hover:border-primary transition-all duration-300 bloom-shadow"
+    >
+      <div className="aspect-square relative overflow-hidden bg-surface-high">
+        <AssetThumbnail asset={asset} />
+        <div className="absolute inset-0 bg-void-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2">
+          <Button size="sm" variant="ghost" onClick={onView} className="h-10 w-10 p-0 bg-surface/80 hover:bg-surface text-foreground rounded-full">
+            <Eye className="h-5 w-5" />
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onDownload} className="h-10 w-10 p-0 bg-surface/80 hover:bg-surface text-foreground rounded-full">
+            <Download className="h-5 w-5" />
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onDelete} className="h-10 w-10 p-0 bg-destructive/80 hover:bg-destructive text-white rounded-full">
+            <Trash2 className="h-5 w-5" />
+          </Button>
+        </div>
+        <div className="absolute top-2 right-2">
+          <AssetTypeBadge kind={asset.kind} />
+        </div>
+      </div>
+      <div className="p-4 space-y-1">
+        <h4 className="font-medium text-foreground truncate text-sm">{getLabel(asset)}</h4>
+        <p className="text-xs text-muted font-label">{formatDate(getDate(asset))}</p>
+        {asset.kind === '3d' && (
+          <div className="flex items-center gap-2">
+            <Badge variant="success" className="capitalize text-[10px]">{asset.quality}</Badge>
+            <span className="text-[10px] text-muted font-label">{asset.file_size}</span>
+          </div>
+        )}
+        {asset.kind === 'video' && asset.duration && (
+          <span className="text-[10px] text-muted font-label">{asset.duration}</span>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function AssetRow({ asset, index, onView, onDownload, onDelete, formatDate, getLabel, getDate }: {
+  asset: Asset; index: number;
+  onView: () => void; onDownload: () => void; onDelete: () => void;
+  formatDate: (d: string) => string;
+  getLabel: (a: Asset) => string;
+  getDate: (a: Asset) => string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.03 }}
+      className="bg-surface border border-border rounded-lg p-4 hover:border-primary transition-all duration-200 bloom-shadow"
+    >
+      <div className="flex items-center gap-4">
+        <div className="w-20 h-20 rounded-lg overflow-hidden bg-surface-high flex-shrink-0 group">
+          <AssetThumbnail asset={asset} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <AssetTypeBadge kind={asset.kind} />
+            <h4 className="font-medium text-foreground truncate text-sm">{getLabel(asset)}</h4>
+          </div>
+          <p className="text-xs text-muted font-label">{formatDate(getDate(asset))}</p>
+          {asset.kind === '3d' && <p className="text-xs text-muted font-label">{asset.file_size} · {asset.quality} quality</p>}
+          {asset.kind === 'video' && asset.duration && <p className="text-xs text-muted font-label">{asset.duration}</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={onView}><Eye className="h-4 w-4 mr-2" />View</Button>
+          <Button size="sm" variant="outline" onClick={onDownload}><Download className="h-4 w-4 mr-2" />Download</Button>
+          <Button size="sm" variant="outline" onClick={onDelete} className="text-destructive hover:bg-destructive/10">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </motion.div>
   );
 }

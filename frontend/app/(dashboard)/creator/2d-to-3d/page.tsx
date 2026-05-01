@@ -1,5 +1,7 @@
 'use client';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+
 import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,13 +21,13 @@ import ConversionHistory, {
   ConversionHistoryItem,
 } from '@/components/creator/ConversionHistory';
 import { conversionAPI } from '@/lib/api';
+import { withAuth } from '@/lib/utils';
 
-// Dynamically import ModelViewer to disable SSR
 const ModelViewer = dynamic(() => import('@/components/creator/ModelViewer'), {
   ssr: false,
   loading: () => (
-    <div className="aspect-square bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg overflow-hidden border border-gray-200 relative flex items-center justify-center">
-      <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+    <div className="aspect-square bg-surface-high rounded-lg overflow-hidden border border-border relative flex items-center justify-center">
+      <Loader2 className="h-12 w-12 text-primary animate-spin" />
     </div>
   ),
 });
@@ -45,12 +47,11 @@ interface ConversionProgress {
 }
 
 export default function TwoDToThreeDPage() {
-  // State
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [settings, setSettings] = useState<ConversionSettingsData>({
-    quality: 'medium',
-    outputFormat: 'obj',
-    withTexture: false,
+    quality: 'high',
+    outputFormat: 'glb',
+    withTexture: true,
   });
   const [conversion, setConversion] = useState<ConversionProgress>({
     status: 'idle',
@@ -59,31 +60,26 @@ export default function TwoDToThreeDPage() {
   });
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
-
-  // History data - starts empty, populated after real conversions
   const [history, setHistory] = useState<ConversionHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  // Load conversion history from database on mount
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         const response = await conversionAPI.getHistory({ limit: 10 });
         const conversions = response.data.data.conversions || [];
-
-        // Transform database conversions to history items
         const historyItems: ConversionHistoryItem[] = conversions.map((conv: any) => ({
           id: conv.id,
-          originalImage: `http://localhost:5001${conv.original_image_url}`,
-          thumbnailUrl: `http://localhost:5001${conv.thumbnail_url}`,
-          modelUrl: `http://localhost:5001${conv.model_url}`,
+          originalImage: `${BACKEND_URL}${conv.original_image_url}`,
+          thumbnailUrl: `${BACKEND_URL}${conv.thumbnail_url}`,
+          modelUrl: withAuth(`${BACKEND_URL}${conv.model_url}`),
           fileName: conv.file_name,
           format: conv.output_format,
           quality: conv.quality,
           createdAt: new Date(conv.created_at),
           fileSize: conv.file_size,
+          method: conv.settings?.method,
         }));
-
         setHistory(historyItems);
       } catch (error) {
         console.error('Failed to load conversion history:', error);
@@ -91,11 +87,9 @@ export default function TwoDToThreeDPage() {
         setIsLoadingHistory(false);
       }
     };
-
     fetchHistory();
   }, []);
 
-  // Handlers
   const handleFilesChange = useCallback((files: UploadedFile[]) => {
     setUploadedFiles(files);
     if (files.length > 0) {
@@ -103,72 +97,61 @@ export default function TwoDToThreeDPage() {
     } else {
       setSelectedFile(null);
     }
-    // Reset conversion state when files change
     setConversion({ status: 'idle', progress: 0, message: '' });
     setModelUrl(null);
   }, []);
 
   const performConversion = async () => {
     if (!selectedFile) return;
-
     try {
-      // Create FormData
       const formData = new FormData();
       formData.append('file', selectedFile.file);
       formData.append('output_format', settings.outputFormat);
       formData.append('quality', settings.quality);
 
-      // Stage 1: Uploading with real progress tracking
       const xhr = new XMLHttpRequest();
-
-      // Track upload progress
       xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
-          const percentComplete = Math.round((e.loaded / e.total) * 30); // 0-30%
-          setConversion({
-            status: 'uploading',
-            progress: percentComplete,
-            message: `Uploading image... ${percentComplete}%`,
-          });
+          const percentComplete = Math.round((e.loaded / e.total) * 30);
+          setConversion({ status: 'uploading', progress: percentComplete, message: `Uploading image... ${percentComplete}%` });
         }
       });
 
-      // Handle completion
+      // Tick a live "elapsed" + rotating stage hint while the backend works.
+      // Cloud 3D (TripoSR ~10-20s, Hunyuan3D ~30-60s) runs synchronously in the POST,
+      // so we don't know the true stage — we rotate plausible messages based on elapsed time.
+      let stageTickerId: ReturnType<typeof setInterval> | null = null;
+      const startedAt = Date.now();
+      const stageFor = (elapsedSec: number): { message: string; progress: number } => {
+        if (elapsedSec < 4)  return { message: 'Uploading to GPU worker…',         progress: 35 };
+        if (elapsedSec < 12) return { message: 'Removing background…',              progress: 50 };
+        if (elapsedSec < 25) return { message: 'Generating 3D geometry…',           progress: 70 };
+        if (elapsedSec < 45) return { message: 'Synthesizing textures…',            progress: 85 };
+        return                         { message: 'Finalizing mesh…',               progress: 92 };
+      };
+
       const response = await new Promise<Response>((resolve, reject) => {
         xhr.onload = () => {
+          if (stageTickerId) { clearInterval(stageTickerId); stageTickerId = null; }
           if (xhr.status >= 200 && xhr.status < 300) {
-            // Upload complete, now processing
-            setConversion({
-              status: 'uploading',
-              progress: 30,
-              message: 'Upload complete! Processing...',
-            });
-
-            // Convert XHR response to fetch Response
-            resolve(new Response(xhr.responseText, {
-              status: xhr.status,
-              statusText: xhr.statusText,
-              headers: new Headers({
-                'Content-Type': 'application/json',
-              }),
-            }));
+            resolve(new Response(xhr.responseText, { status: xhr.status, statusText: xhr.statusText, headers: new Headers({ 'Content-Type': 'application/json' }) }));
           } else {
             reject(new Error(`Upload failed with status ${xhr.status}`));
           }
         };
-
-        xhr.onerror = () => reject(new Error('Upload failed'));
-        xhr.ontimeout = () => reject(new Error('Upload timed out'));
-
+        xhr.onerror = () => { if (stageTickerId) clearInterval(stageTickerId); reject(new Error('Upload failed')); };
+        xhr.ontimeout = () => { if (stageTickerId) clearInterval(stageTickerId); reject(new Error('Upload timed out')); };
         xhr.open('POST', 'http://localhost:5001/api/convert/2d-to-3d');
-
-        // Add Authorization header
         const token = localStorage.getItem('authToken');
-        if (token) {
-          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-        }
-
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.send(formData);
+
+        // Start the ticker after a moment — upload-progress handles the first 30%.
+        stageTickerId = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+          const { message, progress } = stageFor(elapsed);
+          setConversion({ status: 'processing', progress, message: `${message} (${elapsed}s)` });
+        }, 1000);
       });
 
       if (!response.ok) {
@@ -177,59 +160,21 @@ export default function TwoDToThreeDPage() {
       }
 
       const result = await response.json();
+      setConversion({ status: 'completed', progress: 100, message: 'Conversion complete!' });
 
-      // Stage 2: Processing stages with visual feedback
-      setConversion({
-        status: 'processing',
-        progress: 50,
-        message: 'Estimating depth map...',
-      });
-      await new Promise((r) => setTimeout(r, 500));
-
-      setConversion({
-        status: 'processing',
-        progress: 70,
-        message: 'Generating 3D mesh...',
-      });
-      await new Promise((r) => setTimeout(r, 500));
-
-      setConversion({
-        status: 'processing',
-        progress: 90,
-        message: 'Finalizing model...',
-      });
-      await new Promise((r) => setTimeout(r, 300));
-
-      // Stage 3: Completed
-      setConversion({
-        status: 'completed',
-        progress: 100,
-        message: 'Conversion complete!',
-      });
-
-      // Set the download URL for the model
       if (result.success && result.data.download_url) {
-        const downloadUrl = `http://localhost:5001${result.data.download_url}`;
+        const downloadUrl = withAuth(`${BACKEND_URL}${result.data.download_url}`);
         setModelUrl(downloadUrl);
-
-        // Reload history from database to get the saved conversion
         try {
           const historyResponse = await conversionAPI.getHistory({ limit: 10 });
           const conversions = historyResponse.data.data.conversions || [];
-
-          // Transform database conversions to history items
           const historyItems: ConversionHistoryItem[] = conversions.map((conv: any) => ({
-            id: conv.id,
-            originalImage: `http://localhost:5001${conv.original_image_url}`,
-            thumbnailUrl: `http://localhost:5001${conv.thumbnail_url}`,
-            modelUrl: `http://localhost:5001${conv.model_url}`,
-            fileName: conv.file_name,
-            format: conv.output_format,
-            quality: conv.quality,
-            createdAt: new Date(conv.created_at),
-            fileSize: conv.file_size,
+            id: conv.id, originalImage: `http://localhost:5001${conv.original_image_url}`,
+            thumbnailUrl: `http://localhost:5001${conv.thumbnail_url}`, modelUrl: withAuth(`http://localhost:5001${conv.model_url}`),
+            fileName: conv.file_name, format: conv.output_format, quality: conv.quality,
+            createdAt: new Date(conv.created_at), fileSize: conv.file_size,
+            method: conv.settings?.method,
           }));
-
           setHistory(historyItems);
         } catch (historyError) {
           console.error('Failed to reload history:', historyError);
@@ -237,60 +182,40 @@ export default function TwoDToThreeDPage() {
       }
     } catch (error) {
       console.error('Conversion error:', error);
-      setConversion({
-        status: 'error',
-        progress: 0,
-        message: error instanceof Error ? error.message : 'Conversion failed. Please try again.',
-      });
+      setConversion({ status: 'error', progress: 0, message: error instanceof Error ? error.message : 'Conversion failed. Please try again.' });
     }
   };
 
-  const handleConvert = () => {
-    performConversion();
-  };
+  const handleConvert = () => { performConversion(); };
 
   const handleDownload = () => {
     if (modelUrl) {
-      // Add download=true parameter to trigger download
-      const downloadUrl = modelUrl.includes('?')
-        ? `${modelUrl}&download=true`
-        : `${modelUrl}?download=true`;
+      const downloadUrl = modelUrl.includes('?') ? `${modelUrl}&download=true` : `${modelUrl}?download=true`;
       window.open(downloadUrl, '_blank');
     }
   };
 
   const handleViewHistoryItem = (item: ConversionHistoryItem) => {
-    // Only set modelUrl if the item has a valid model URL
     if (item.modelUrl && item.modelUrl.length > 0) {
       setModelUrl(item.modelUrl);
       setConversion({ status: 'completed', progress: 100, message: '' });
-
-      // Scroll to the model viewer with smooth animation
       setTimeout(() => {
         const viewerElement = document.getElementById('model-viewer-section');
-        if (viewerElement) {
-          viewerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        if (viewerElement) viewerElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
     }
   };
 
   const handleDownloadHistoryItem = (item: ConversionHistoryItem) => {
     if (item.modelUrl) {
-      // Add download=true parameter to trigger download
-      const downloadUrl = item.modelUrl.includes('?')
-        ? `${item.modelUrl}&download=true`
-        : `${item.modelUrl}?download=true`;
+      const downloadUrl = item.modelUrl.includes('?') ? `${item.modelUrl}&download=true` : `${item.modelUrl}?download=true`;
       window.open(downloadUrl, '_blank');
     }
   };
 
   const handleDeleteHistoryItem = async (id: string) => {
     try {
-      // Delete from database
       await conversionAPI.deleteConversion(id);
-
-      // Remove from local state
       setHistory((prev) => prev.filter((item) => item.id !== id));
     } catch (error) {
       console.error('Failed to delete conversion:', error);
@@ -304,27 +229,17 @@ export default function TwoDToThreeDPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a1f] p-6 lg:p-8 pt-6 lg:pt-8 relative overflow-hidden">
-      {/* Animated Grid Background - Same as Features page */}
-      <div className="fixed inset-0 bg-[linear-gradient(to_right,#1a1a3e_1px,transparent_1px),linear-gradient(to_bottom,#1a1a3e_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
-
-      {/* Animated Background Blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl animate-pulse delay-1000" />
-        <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse delay-500" />
-      </div>
-
+    <div className="min-h-screen bg-background px-8 py-8 relative">
       {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8 relative z-10"
+        className="mb-8"
       >
-        <h1 className="text-3xl font-bold text-white mb-2">
-          2D to 3D Converter
+        <h1 className="text-4xl font-headline font-black tracking-tight text-foreground uppercase">
+          2D to 3D <span className="text-accent">Converter</span>
         </h1>
-        <p className="text-gray-400">
+        <p className="text-muted mt-2">
           Transform your 2D images into stunning 3D models with AI
         </p>
       </motion.div>
@@ -334,30 +249,24 @@ export default function TwoDToThreeDPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Upload & Settings */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Upload Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg border border-white/10 p-6"
+              className="bg-surface border border-border rounded-lg p-6 bloom-shadow"
             >
-              <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-lg font-semibold text-white">Upload Images</h2>
-              </div>
-              <ImageUploader
-                onFilesChange={handleFilesChange}
-                maxFiles={5}
-                maxSize={10}
-              />
+              <h2 className="font-headline text-sm font-bold text-foreground mb-4 uppercase tracking-tight">
+                Upload Images
+              </h2>
+              <ImageUploader onFilesChange={handleFilesChange} maxFiles={5} maxSize={10} />
             </motion.div>
 
-            {/* Settings Section */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg border border-white/10 p-6"
+              className="bg-surface border border-border rounded-lg p-6 bloom-shadow"
             >
-              <h2 className="text-lg font-semibold text-white mb-4">
+              <h2 className="font-headline text-sm font-bold text-foreground mb-4 uppercase tracking-tight">
                 Conversion Settings
               </h2>
               <ConversionSettings
@@ -367,43 +276,27 @@ export default function TwoDToThreeDPage() {
               />
             </motion.div>
 
-            {/* Action Buttons */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg border border-white/10 p-6 space-y-4"
+              className="bg-surface border border-border rounded-lg p-6 bloom-shadow space-y-4"
             >
               <Button
                 onClick={handleConvert}
-                disabled={
-                  uploadedFiles.length === 0 ||
-                  conversion.status === 'processing' ||
-                  conversion.status === 'uploading'
-                }
-                className="w-full h-12 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-medium rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={uploadedFiles.length === 0 || conversion.status === 'processing' || conversion.status === 'uploading'}
+                className="w-full h-12 font-headline font-bold uppercase tracking-widest"
               >
                 {conversion.status === 'uploading' || conversion.status === 'processing' ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Converting...
-                  </>
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Converting...</>
                 ) : (
-                  <>
-                    <Play className="h-5 w-5 mr-2" />
-                    Convert to 3D
-                  </>
+                  <><Play className="h-5 w-5 mr-2" />Convert to 3D</>
                 )}
               </Button>
 
               {conversion.status === 'completed' && (
-                <Button
-                  onClick={handleReset}
-                  variant="outline"
-                  className="w-full bg-white/10 hover:bg-white/20 text-white border-2 border-white/30 hover:border-white/50 rounded-xl transition-all duration-300"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Convert Another
+                <Button onClick={handleReset} variant="outline" className="w-full">
+                  <RefreshCw className="h-4 w-4 mr-2" />Convert Another
                 </Button>
               )}
             </motion.div>
@@ -413,29 +306,24 @@ export default function TwoDToThreeDPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Progress Indicator */}
             <AnimatePresence>
-              {(conversion.status === 'uploading' ||
-                conversion.status === 'processing') && (
+              {(conversion.status === 'uploading' || conversion.status === 'processing') && (
                 <motion.div
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg border border-white/10 p-6"
+                  className="bg-surface border border-border rounded-lg p-6 bloom-shadow"
                 >
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
-                        <span className="font-medium text-white">
-                          {conversion.message}
-                        </span>
+                        <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                        <span className="font-medium text-foreground">{conversion.message}</span>
                       </div>
-                      <span className="text-sm text-gray-400">
-                        {conversion.progress}%
-                      </span>
+                      <span className="text-sm text-muted font-label">{conversion.progress}%</span>
                     </div>
-                    <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-background rounded-full overflow-hidden">
                       <motion.div
-                        className="h-full bg-gradient-to-r from-blue-500 to-emerald-500"
+                        className="h-full bg-primary"
                         initial={{ width: 0 }}
                         animate={{ width: `${conversion.progress}%` }}
                         transition={{ duration: 0.3 }}
@@ -453,13 +341,11 @@ export default function TwoDToThreeDPage() {
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="bg-green-500/10 border border-green-500/30 rounded-2xl p-4"
+                  className="bg-success/10 border border-success/30 rounded-lg p-4"
                 >
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-400" />
-                    <span className="text-green-300 font-medium">
-                      Conversion completed successfully!
-                    </span>
+                    <CheckCircle2 className="h-5 w-5 text-success" />
+                    <span className="text-success font-medium">Conversion completed successfully!</span>
                   </div>
                 </motion.div>
               )}
@@ -472,11 +358,11 @@ export default function TwoDToThreeDPage() {
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4"
+                  className="bg-destructive/10 border border-destructive/30 rounded-lg p-4"
                 >
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-red-400" />
-                    <span className="text-red-300 font-medium">
+                    <AlertCircle className="h-5 w-5 text-destructive" />
+                    <span className="text-destructive font-medium">
                       {conversion.message || 'Conversion failed. Please try again.'}
                     </span>
                   </div>
@@ -490,19 +376,16 @@ export default function TwoDToThreeDPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg border border-white/10 p-6"
+              className="bg-surface border border-border rounded-lg p-6 bloom-shadow"
             >
-              <h2 className="text-lg font-semibold text-white mb-4">
+              <h2 className="font-headline text-sm font-bold text-foreground mb-4 uppercase tracking-tight">
                 3D Model Preview
               </h2>
               <ModelViewer
                 modelUrl={conversion.status === 'completed' ? modelUrl : null}
                 originalImage={selectedFile?.preview}
                 onDownload={handleDownload}
-                isLoading={
-                  conversion.status === 'uploading' ||
-                  conversion.status === 'processing'
-                }
+                isLoading={conversion.status === 'uploading' || conversion.status === 'processing'}
               />
             </motion.div>
 
@@ -511,7 +394,7 @@ export default function TwoDToThreeDPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-lg border border-white/10 p-6"
+              className="bg-surface border border-border rounded-lg p-6 bloom-shadow"
             >
               <ConversionHistory
                 items={history}
