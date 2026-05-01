@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store/authStore';
 import { conversionAPI } from '@/lib/api';
+import NewProjectModal from '@/components/creator/NewProjectModal';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
 
@@ -56,6 +57,7 @@ export default function CreatorDashboard() {
 
   const [projects, setProjects] = useState<RecentProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -478,7 +480,7 @@ export default function CreatorDashboard() {
                 <h2 className="text-lg font-headline font-bold text-foreground uppercase tracking-tight">Quick Actions</h2>
               </div>
               <div className="p-6 space-y-2">
-                <Button variant="outline" className="w-full justify-start">
+                <Button variant="outline" onClick={() => setNewProjectOpen(true)} className="w-full justify-start">
                   <Plus className="mr-2 h-4 w-4 text-primary" />New Project
                 </Button>
                 <Link href="/creator/2d-to-3d" className="block">
@@ -519,6 +521,8 @@ export default function CreatorDashboard() {
           </div>
         </div>
       </div>
+
+      <NewProjectModal open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
     </div>
   );
 }

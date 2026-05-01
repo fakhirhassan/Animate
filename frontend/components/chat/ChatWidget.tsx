@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, X, Send, Loader2 } from 'lucide-react';
 import { chatAPI, type ChatTurn } from '@/lib/api';
+import { useChatStore } from '@/store/chatStore';
 
 type Mode = 'assistant' | 'refine';
 
@@ -37,7 +38,8 @@ const QUICK_PROMPTS: Record<string, string[]> = {
 
 export default function ChatWidget() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const open = useChatStore((s) => s.open);
+  const setOpen = useChatStore((s) => s.setOpen);
   const [mode, setMode] = useState<Mode>('assistant');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');

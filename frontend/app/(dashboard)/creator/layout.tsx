@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuthStore } from '@/store/authStore';
 import ChatWidget from '@/components/chat/ChatWidget';
+import NewProjectModal from '@/components/creator/NewProjectModal';
 
 const navItems = [
   {
@@ -80,6 +81,7 @@ export default function CreatorLayout({
   const { user, token, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   useEffect(() => {
     if (!token || !user) {
@@ -179,6 +181,7 @@ export default function CreatorLayout({
           user={user}
           isActive={isActive}
           onLogout={handleLogout}
+          onNewProject={() => setNewProjectOpen(true)}
         />
       </aside>
 
@@ -188,6 +191,7 @@ export default function CreatorLayout({
       </main>
 
       <ChatWidget />
+      <NewProjectModal open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
     </div>
   );
 }
@@ -196,10 +200,12 @@ function DesktopSidebar({
   user,
   isActive,
   onLogout,
+  onNewProject,
 }: {
   user: any;
   isActive: (href: string) => boolean;
   onLogout: () => void;
+  onNewProject: () => void;
 }) {
   return (
     <>
@@ -231,7 +237,7 @@ function DesktopSidebar({
 
       {/* Bottom Section */}
       <div className="px-6 py-4 mt-auto space-y-2">
-        <Button className="w-full font-label text-xs tracking-widest uppercase">
+        <Button onClick={onNewProject} className="w-full font-label text-xs tracking-widest uppercase">
           New Project
         </Button>
         <Link
@@ -241,10 +247,13 @@ function DesktopSidebar({
           <ArrowLeft className="h-5 w-5" />
           <span className="text-[10px] font-label uppercase tracking-widest">Back to Site</span>
         </Link>
-        <button className="flex items-center gap-4 text-muted px-6 py-4 hover:text-primary transition-colors w-full">
+        <Link
+          href="/creator/help"
+          className="flex items-center gap-4 text-muted px-6 py-4 hover:text-primary transition-colors w-full"
+        >
           <HelpCircle className="h-5 w-5" />
           <span className="text-[10px] font-label uppercase tracking-widest">Help Center</span>
-        </button>
+        </Link>
       </div>
 
       {/* User Section */}
