@@ -299,6 +299,43 @@ export const chatAPI = {
   status: () => api.get('/chat/status'),
 };
 
+// Video Editor API
+export const editAPI = {
+  listVoices: () => api.get('/edit/voices'),
+
+  uploadMusic: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/edit/upload-music', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  uploadSource: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('/edit/upload-source', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000, // 5 min for large uploads
+    });
+  },
+
+  render: (data: {
+    source_id?: string;
+    source_url?: string;
+    trim_start?: number;
+    trim_end?: number;
+    aspect?: '16:9' | '9:16' | '1:1' | '4:5' | 'original';
+    music_url?: string;
+    music_volume?: number;
+    voice_text?: string;
+    voice_preset?: string;
+    voice_volume?: number;
+    keep_original_audio?: boolean;
+    original_audio_volume?: number;
+  }) => api.post('/edit/render', data, { timeout: 600000 }),
+};
+
 // Image Generation API (Text-to-Image)
 export const imageAPI = {
   generate: (data: {

@@ -18,6 +18,7 @@ import {
   HelpCircle,
   ImageIcon,
   ArrowLeft,
+  Scissors,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -57,11 +58,10 @@ const navItems = [
     description: 'View and manage your 3D models',
   },
   {
-    name: 'Projects',
-    href: '/creator/projects',
-    icon: FolderOpen,
-    description: 'Manage your projects',
-    disabled: true,
+    name: 'Editor',
+    href: '/creator/edit',
+    icon: Scissors,
+    description: 'Trim, crop, and add audio to videos',
   },
   {
     name: 'Settings',
@@ -371,18 +371,6 @@ function NavItem({
   onClick?: () => void;
 }) {
   const Icon = item.icon;
-
-  if (item.disabled) {
-    return (
-      <div className="relative flex items-center gap-4 px-6 py-4 text-muted/50 cursor-not-allowed">
-        <Icon className="h-5 w-5" />
-        <span className="text-xs font-semibold tracking-widest font-label uppercase">{item.name}</span>
-        <span className="ml-auto text-[9px] uppercase tracking-wide bg-surface-high text-muted px-1.5 py-0.5 rounded">
-          Soon
-        </span>
-      </div>
-    );
-  }
 
   return (
     <Link
