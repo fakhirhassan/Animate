@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame, useLoader } from '@react-three/fiber';
-import { OrbitControls, Grid, Environment } from '@react-three/drei';
+import { OrbitControls, Grid } from '@react-three/drei';
 import { motion } from 'framer-motion';
 import {
   RotateCcw,
@@ -327,13 +327,11 @@ export default function ModelViewer({
                 gl={{ preserveDrawingBuffer: true }}
               >
                 <Suspense fallback={<LoadingSpinner />}>
-                  <ambientLight intensity={0.8} />
-                  <directionalLight position={[5, 5, 5]} intensity={1.2} castShadow />
-                  <directionalLight position={[-5, 3, -5]} intensity={0.6} />
+                  <ambientLight intensity={1.0} />
+                  <directionalLight position={[5, 5, 5]} intensity={1.4} castShadow />
+                  <directionalLight position={[-5, 3, -5]} intensity={0.7} />
+                  <directionalLight position={[0, 5, -5]} intensity={0.5} />
                   <pointLight position={[-10, -10, -10]} intensity={0.4} />
-                  {/* PBR environment so TRELLIS metallic/roughness textures show
-                      colors instead of rendering black. `studio` ships with drei. */}
-                  <Environment preset="studio" />
 
                   <Model url={modelUrl} />
 
