@@ -1,16 +1,24 @@
 """
-Scene Parser using Ollama (Llama 3.1)
+Scene Parser
 Converts user text descriptions into structured scene JSON.
+Auto-routes between Gemini, Groq, and local Ollama based on which
+API keys are configured (Gemini > Groq > Ollama).
 """
 
 import json
 import logging
+import os
 import re
 from typing import Dict, Any, Optional
 
-import ollama
-
 logger = logging.getLogger(__name__)
+
+GROQ_API_KEY = os.getenv('GROQ_API_KEY', '').strip()
+GROQ_MODEL = os.getenv('GROQ_SCENE_MODEL', 'llama-3.1-8b-instant')
+GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '').strip()
+GEMINI_MODEL = os.getenv('GEMINI_SCENE_MODEL', 'gemini-2.0-flash')
+GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 SYSTEM_PROMPT = """You are a 3D animation scene parser. Given a text description of a scene, you must output ONLY valid JSON (no markdown, no explanation) that describes the scene with the following structure:
 
@@ -73,13 +81,26 @@ class SceneParser:
     def __init__(self, model_name: str = MODEL_NAME):
         self.model_name = model_name
         self._available = None
-        logger.info(f"SceneParser initialized with model: {model_name}")
+        self.backend = self._select_backend()
+        logger.info(f"SceneParser initialized: backend={self.backend}, model={model_name}")
+
+    @staticmethod
+    def _select_backend() -> str:
+        if GEMINI_API_KEY:
+            return 'gemini'
+        if GROQ_API_KEY:
+            return 'groq'
+        return 'ollama'
 
     def is_available(self) -> bool:
-        """Check if Ollama and the model are available."""
+        """Check if the selected backend is reachable."""
         if self._available is not None:
             return self._available
+        if self.backend in ('gemini', 'groq'):
+            self._available = True
+            return True
         try:
+            import ollama
             models = ollama.list()
             model_names = [m.model for m in models.models]
             self._available = any(self.model_name in name for name in model_names)
@@ -105,51 +126,104 @@ class SceneParser:
         """
         if not self.is_available():
             raise RuntimeError(
-                "Ollama is not running or model is not available. "
-                f"Run: ollama pull {self.model_name}"
+                f"Scene parser backend '{self.backend}' is not available. "
+                f"For Ollama, run: ollama pull {self.model_name}"
             )
 
-        logger.info(f"Parsing scene: {user_text[:100]}...")
+        logger.info(f"Parsing scene via {self.backend}: {user_text[:100]}...")
 
-        # Wrap the user's prompt so the model treats it as data to transform,
-        # not a request directed at itself. This avoids spurious refusals
-        # like "I can't help you with that" on perfectly benign scene text.
         framed_user = (
             "Convert the following scene description into the JSON schema "
             "defined in the system message. Output JSON only.\n\n"
             f"Scene description:\n{user_text}"
         )
 
+        if self.backend == 'gemini':
+            raw = self._parse_via_gemini(framed_user)
+        elif self.backend == 'groq':
+            raw = self._parse_via_groq(framed_user)
+        else:
+            raw = self._parse_via_ollama(framed_user)
+
+        logger.info(f"{self.backend} response ({len(raw)} chars): {raw[:300]}")
+
+        if not raw:
+            raise ValueError(f"{self.backend} returned an empty response")
+
+        try:
+            scene = self._extract_json(raw)
+        except ValueError:
+            logger.error(
+                f"Scene parse failed.\n  User input: {user_text[:200]}\n"
+                f"  {self.backend} said: {raw[:300]}"
+            )
+            raise
+
+        scene = self._validate_scene(scene)
+        return scene
+
+    def _parse_via_ollama(self, framed_user: str) -> str:
+        import ollama
         response = ollama.chat(
             model=self.model_name,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": framed_user},
             ],
-            # format="json" forces Ollama to emit syntactically valid JSON,
-            # which both prevents prose-style refusals and removes the need
-            # to strip markdown fences.
             format="json",
             options={"temperature": 0.3, "num_predict": 2048},
         )
+        return response.message.content.strip()
 
-        raw = response.message.content.strip()
-        logger.info(f"Ollama response ({len(raw)} chars): {raw[:300]}")
+    def _parse_via_groq(self, framed_user: str) -> str:
+        import requests
+        resp = requests.post(
+            GROQ_URL,
+            headers={
+                'Authorization': f'Bearer {GROQ_API_KEY}',
+                'Content-Type': 'application/json',
+            },
+            json={
+                'model': GROQ_MODEL,
+                'messages': [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": framed_user},
+                ],
+                'temperature': 0.3,
+                'max_tokens': 2048,
+                'response_format': {'type': 'json_object'},
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        return resp.json()['choices'][0]['message']['content'].strip()
 
-        if not raw:
-            raise ValueError("Ollama returned an empty response")
-
-        try:
-            scene = self._extract_json(raw)
-        except ValueError as e:
-            logger.error(
-                f"Scene parse failed.\n  User input: {user_text[:200]}\n"
-                f"  Ollama said: {raw[:300]}"
-            )
-            raise
-
-        scene = self._validate_scene(scene)
-        return scene
+    def _parse_via_gemini(self, framed_user: str) -> str:
+        import requests
+        payload = {
+            'contents': [
+                {'role': 'user', 'parts': [{'text': framed_user}]},
+            ],
+            'systemInstruction': {'parts': [{'text': SYSTEM_PROMPT}]},
+            'generationConfig': {
+                'temperature': 0.3,
+                'maxOutputTokens': 2048,
+                'responseMimeType': 'application/json',
+            },
+        }
+        resp = requests.post(
+            f'{GEMINI_URL}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}',
+            headers={'Content-Type': 'application/json'},
+            json=payload,
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        candidates = data.get('candidates', [])
+        if not candidates:
+            raise RuntimeError(f'Gemini returned no candidates: {data}')
+        parts = candidates[0].get('content', {}).get('parts', [])
+        return ''.join(p.get('text', '') for p in parts).strip()
 
     def _extract_json(self, text: str) -> Dict[str, Any]:
         """Extract JSON from LLM response, handling markdown code blocks."""
