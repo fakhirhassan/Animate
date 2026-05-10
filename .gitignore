@@ -69,3 +69,4 @@ backend/database/migrations/versions/
 # Misc
 *.bak
 *.tmp
+FYP.pem

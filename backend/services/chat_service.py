@@ -1,8 +1,8 @@
 """
 Chat Service
-Conversational assistant for MESH. Auto-routes between local Ollama
-(development) and Groq's hosted llama-3.1 (production / when GROQ_API_KEY
-is set), so the same code path works in both environments.
+Conversational assistant for MESH. Auto-routes between Gemini (production
+on EC2 / when GEMINI_API_KEY is set), Groq's hosted llama-3.1 (when
+GROQ_API_KEY is set), and local Ollama (development fallback).
 
 Two modes:
   - "assistant": general help about MESH features and how to use them
@@ -20,6 +20,9 @@ OLLAMA_MODEL = os.getenv('OLLAMA_CHAT_MODEL', 'llama3.1:8b')
 GROQ_MODEL = os.getenv('GROQ_CHAT_MODEL', 'llama-3.1-8b-instant')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY', '').strip()
 GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+GEMINI_MODEL = os.getenv('GEMINI_CHAT_MODEL', 'gemini-1.5-flash')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '').strip()
+GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 
 # --- Personality / system prompts ----------------------------------------
@@ -83,14 +86,21 @@ def _build_system_prompt(page: Optional[str], mode: str) -> str:
 
 # --- Backend selection ---------------------------------------------------
 
-def _use_groq() -> bool:
-    """Use Groq when an API key is configured. Otherwise fall back to Ollama."""
-    return bool(GROQ_API_KEY)
+def _select_backend() -> str:
+    """Priority: Gemini > Groq > Ollama (local fallback)."""
+    if GEMINI_API_KEY:
+        return 'gemini'
+    if GROQ_API_KEY:
+        return 'groq'
+    return 'ollama'
 
 
 def get_status() -> Dict[str, Any]:
     """Report which backend is active and whether it's reachable."""
-    if _use_groq():
+    backend = _select_backend()
+    if backend == 'gemini':
+        return {'available': True, 'backend': 'gemini', 'model': GEMINI_MODEL}
+    if backend == 'groq':
         return {'available': True, 'backend': 'groq', 'model': GROQ_MODEL}
 
     try:
@@ -123,6 +133,45 @@ def _chat_via_ollama(messages: List[Dict[str, str]]) -> str:
         options={'temperature': 0.5, 'num_predict': 512},
     )
     return response.message.content.strip()
+
+
+def _chat_via_gemini(messages: List[Dict[str, str]]) -> str:
+    """Gemini uses a different message shape: system instruction is separate,
+    and roles are 'user' / 'model' (not 'assistant')."""
+    import requests
+    system_instruction = ''
+    contents = []
+    for m in messages:
+        role = m['role']
+        if role == 'system':
+            system_instruction = m['content']
+            continue
+        gemini_role = 'model' if role == 'assistant' else 'user'
+        contents.append({'role': gemini_role, 'parts': [{'text': m['content']}]})
+
+    payload: Dict[str, Any] = {
+        'contents': contents,
+        'generationConfig': {'temperature': 0.5, 'maxOutputTokens': 512},
+    }
+    if system_instruction:
+        payload['systemInstruction'] = {'parts': [{'text': system_instruction}]}
+
+    resp = requests.post(
+        f'{GEMINI_URL}/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}',
+        headers={'Content-Type': 'application/json'},
+        json=payload,
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    candidates = data.get('candidates', [])
+    if not candidates:
+        raise RuntimeError(f'Gemini returned no candidates: {data}')
+    parts = candidates[0].get('content', {}).get('parts', [])
+    text = ''.join(p.get('text', '') for p in parts).strip()
+    if not text:
+        raise RuntimeError(f'Gemini returned empty text: {data}')
+    return text
 
 
 def _chat_via_groq(messages: List[Dict[str, str]]) -> str:
@@ -179,12 +228,17 @@ def chat(
                 messages.append({'role': role, 'content': content})
     messages.append({'role': 'user', 'content': user_message.strip()})
 
-    backend = 'groq' if _use_groq() else 'ollama'
-    model = GROQ_MODEL if backend == 'groq' else OLLAMA_MODEL
+    backend = _select_backend()
+    model = {'gemini': GEMINI_MODEL, 'groq': GROQ_MODEL, 'ollama': OLLAMA_MODEL}[backend]
     logger.info(f'Chat via {backend} ({model}), mode={mode}, page={page}')
 
     try:
-        reply = _chat_via_groq(messages) if backend == 'groq' else _chat_via_ollama(messages)
+        if backend == 'gemini':
+            reply = _chat_via_gemini(messages)
+        elif backend == 'groq':
+            reply = _chat_via_groq(messages)
+        else:
+            reply = _chat_via_ollama(messages)
     except Exception as e:
         logger.error(f'{backend} chat failed: {e}')
         raise RuntimeError(f'{backend} chat failed: {e}')
