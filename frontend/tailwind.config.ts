@@ -62,7 +62,7 @@ const config: Config = {
           surface: "#111124",
           elevated: "#1A1A35",
           border: "#2A2A4A",
-          muted: "#6B6B99",
+          muted: "#FFFFFF",
           text: "#EEEEFF",
         },
         neon: {

@@ -19,12 +19,14 @@ import {
   ImageIcon,
   ArrowLeft,
   Scissors,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuthStore } from '@/store/authStore';
 import ChatWidget from '@/components/chat/ChatWidget';
 import NewProjectModal from '@/components/creator/NewProjectModal';
+import RunningJobsIndicator from '@/components/shared/RunningJobsIndicator';
 
 const navItems = [
   {
@@ -64,6 +66,12 @@ const navItems = [
     description: 'Trim, crop, and add audio to videos',
   },
   {
+    name: 'Feedback',
+    href: '/creator/feedback',
+    icon: MessageSquare,
+    description: 'Send feedback to the team',
+  },
+  {
     name: 'Settings',
     href: '/creator/settings',
     icon: Settings,
@@ -78,12 +86,18 @@ export default function CreatorLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, token, logout } = useAuthStore();
+  const { user, token, logout, hasHydrated } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   useEffect(() => {
+    // Wait for zustand-persist to rehydrate from localStorage before
+    // deciding whether the user is logged in. Without this gate, the
+    // first render after a reload sees null user/token and incorrectly
+    // bounces to /login.
+    if (!hasHydrated) return;
+
     if (!token || !user) {
       router.push('/login');
       return;
@@ -93,7 +107,7 @@ export default function CreatorLayout({
       return;
     }
     setAuthChecked(true);
-  }, [token, user, router]);
+  }, [hasHydrated, token, user, router]);
 
   const handleLogout = () => {
     logout();
@@ -192,6 +206,7 @@ export default function CreatorLayout({
 
       <ChatWidget />
       <NewProjectModal open={newProjectOpen} onClose={() => setNewProjectOpen(false)} />
+      <RunningJobsIndicator />
     </div>
   );
 }

@@ -212,6 +212,91 @@ def generate_video_cloud(
     }
 
 
+def generate_video_from_image_cloud(
+    image_b64: str,
+    prompt: str,
+    num_frames: int = 81,
+    num_inference_steps: int = 25,
+    fps: int = 16,
+    height: int = 832,
+    width: int = 480,
+    seed: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Image-to-Video using RunPod cloud GPU.
+
+    Skips the SDXL step that `generate_video_cloud` runs and feeds the user's
+    image directly to the Wan2.2 I2V worker. Use when the user has provided
+    their own starting image rather than a text-only prompt.
+
+    Args:
+        image_b64: Raw base64-encoded image bytes (no data: prefix).
+        prompt: Text guidance for motion + style.
+        num_frames, num_inference_steps, fps, height, width, seed: same as T2V.
+    """
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Strip data URI prefix defensively — callers sometimes pass either form.
+    if isinstance(image_b64, str) and image_b64.startswith("data:"):
+        image_b64 = image_b64.split(",", 1)[1]
+
+    video_endpoint = _get_endpoint_id()
+    if not video_endpoint:
+        raise RuntimeError("RUNPOD_ENDPOINT_ID not set — cloud I2V unavailable")
+
+    logger.info(f"Cloud I2V: animating user image with prompt '{prompt[:80]}...'")
+
+    payload = {
+        "input": {
+            "prompt": prompt,
+            "image_base64": image_b64,
+            "width": width,
+            "height": height,
+            "length": num_frames,
+            "steps": min(num_inference_steps, 30),
+            "cfg": 2.0,
+            "seed": seed or 42,
+        }
+    }
+
+    result = _runpod_request(video_endpoint, payload, timeout=1800)
+
+    video_b64 = None
+    if isinstance(result, dict):
+        video_b64 = result.get("video_base64") or result.get("video") or result.get("output")
+    elif isinstance(result, str):
+        video_b64 = result
+
+    if isinstance(video_b64, str) and video_b64.startswith("data:"):
+        video_b64 = video_b64.split(",", 1)[1]
+
+    if not video_b64:
+        raise RuntimeError(f"Cloud I2V returned unexpected format: {str(result)[:200]}")
+
+    video_id = str(uuid.uuid4())[:8]
+    filename = f"video_{video_id}.mp4"
+    filepath = os.path.join(OUTPUT_DIR, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(base64.b64decode(video_b64))
+
+    duration = num_frames / fps
+    logger.info(f"Cloud I2V saved: {filepath} ({duration:.1f}s)")
+
+    return {
+        "video_id": video_id,
+        "video_url": f"/uploads/output/videos/{filename}",
+        "filename": filename,
+        "filepath": filepath,
+        "duration": round(duration, 2),
+        "num_frames": num_frames,
+        "fps": fps,
+        "resolution": f"{width}x{height}",
+        "prompt": prompt,
+        "source": "cloud-i2v",
+    }
+
+
 def generate_image_cloud(
     prompt: str,
     width: int = 1024,

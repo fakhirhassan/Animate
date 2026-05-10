@@ -219,7 +219,7 @@ def render():
 
         # Persist as a new animation row so it appears in Assets / Recents.
         try:
-            db_service.save_conversion(user_id, {
+            save_result = db_service.save_conversion(user_id, {
                 "type": "animation",
                 "file_name": result["filename"],
                 "original_image_url": "",
@@ -241,6 +241,8 @@ def render():
                     "duration": result["duration"],
                 },
             })
+            if save_result.get("success") and save_result.get("data"):
+                result["conversion_id"] = save_result["data"].get("id")
         except Exception as e:
             logger.error(f"Edit DB save failed (non-fatal): {e}")
 

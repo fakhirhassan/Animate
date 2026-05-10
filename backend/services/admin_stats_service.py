@@ -64,101 +64,100 @@ class AdminStatsService:
             }
 
     def get_user_growth_data(self, months: int = 6) -> Dict[str, Any]:
-        """
-        Get user growth data for the last N months.
-
-        Args:
-            months: Number of months to include
-
-        Returns:
-            Dictionary with monthly user counts
-        """
+        """Monthly user counts for the last N months. Single query, bucketed in Python."""
         try:
-            growth_data = []
             now = datetime.now()
+            # Earliest month start we care about
+            first = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            for _ in range(months - 1):
+                # Step back one month
+                first = (first - timedelta(days=1)).replace(day=1)
 
-            for i in range(months - 1, -1, -1):
-                # Calculate start and end of month
-                target_date = now - timedelta(days=30 * i)
-                month_start = target_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            res = self.supabase.table('users')\
+                .select('created_at')\
+                .gte('created_at', first.isoformat())\
+                .execute()
 
-                # Get next month start
-                if month_start.month == 12:
-                    month_end = month_start.replace(year=month_start.year + 1, month=1)
-                else:
-                    month_end = month_start.replace(month=month_start.month + 1)
+            # Bucket by (year, month)
+            buckets: Dict[tuple, int] = {}
+            for row in (res.data or []):
+                ts = row.get('created_at')
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                    buckets[(dt.year, dt.month)] = buckets.get((dt.year, dt.month), 0) + 1
+                except Exception:
+                    continue
 
-                # Count users created in this month
-                response = self.supabase.table('users')\
-                    .select('id', count='exact')\
-                    .gte('created_at', month_start.isoformat())\
-                    .lt('created_at', month_end.isoformat())\
-                    .execute()
-
-                count = len(response.data) if response.data else 0
-
+            # Walk months oldest -> newest
+            growth_data = []
+            cursor = first
+            for _ in range(months):
                 growth_data.append({
-                    'month': month_start.strftime('%b'),
-                    'users': count
+                    'month': cursor.strftime('%b'),
+                    'users': buckets.get((cursor.year, cursor.month), 0),
                 })
+                # Step forward one month
+                if cursor.month == 12:
+                    cursor = cursor.replace(year=cursor.year + 1, month=1)
+                else:
+                    cursor = cursor.replace(month=cursor.month + 1)
 
-            return {
-                'success': True,
-                'data': growth_data
-            }
+            return {'success': True, 'data': growth_data}
 
         except Exception as e:
             logger.error(f'Error fetching user growth data: {str(e)}')
             return {
                 'success': False,
                 'error': str(e),
-                'message': 'Failed to fetch user growth data'
+                'message': 'Failed to fetch user growth data',
+                'data': [],
             }
 
     def get_conversion_activity(self, days: int = 7) -> Dict[str, Any]:
-        """
-        Get daily conversion activity for the last N days.
-
-        Args:
-            days: Number of days to include
-
-        Returns:
-            Dictionary with daily conversion counts
-        """
+        """Daily conversion counts for the last N days. Single query, bucketed in Python."""
         try:
-            activity_data = []
             now = datetime.now()
+            day_start_now = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            window_start = day_start_now - timedelta(days=days - 1)
 
+            res = self.supabase.table('conversions')\
+                .select('created_at')\
+                .gte('created_at', window_start.isoformat())\
+                .execute()
+
+            # Bucket by date (YYYY-MM-DD)
+            buckets: Dict[str, int] = {}
+            for row in (res.data or []):
+                ts = row.get('created_at')
+                if not ts:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                    key = dt.strftime('%Y-%m-%d')
+                    buckets[key] = buckets.get(key, 0) + 1
+                except Exception:
+                    continue
+
+            activity_data = []
             for i in range(days - 1, -1, -1):
-                target_date = now - timedelta(days=i)
-                day_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
-                day_end = day_start + timedelta(days=1)
-
-                # Count conversions for this day
-                response = self.supabase.table('conversions')\
-                    .select('id', count='exact')\
-                    .gte('created_at', day_start.isoformat())\
-                    .lt('created_at', day_end.isoformat())\
-                    .execute()
-
-                count = len(response.data) if response.data else 0
-
+                d = day_start_now - timedelta(days=i)
+                label = d.strftime('%a') if days <= 7 else d.strftime('%b %d')
                 activity_data.append({
-                    'day': day_start.strftime('%a'),
-                    'conversions': count
+                    'day': label,
+                    'conversions': buckets.get(d.strftime('%Y-%m-%d'), 0),
                 })
 
-            return {
-                'success': True,
-                'data': activity_data
-            }
+            return {'success': True, 'data': activity_data}
 
         except Exception as e:
             logger.error(f'Error fetching conversion activity: {str(e)}')
             return {
                 'success': False,
                 'error': str(e),
-                'message': 'Failed to fetch conversion activity'
+                'message': 'Failed to fetch conversion activity',
+                'data': [],
             }
 
     def get_recent_activities(self, limit: int = 10) -> Dict[str, Any]:

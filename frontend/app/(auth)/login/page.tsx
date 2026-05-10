@@ -7,13 +7,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import Link from 'next/link';
-import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, Zap, Play, Box, Film } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store/authStore';
 import { authAPI } from '@/lib/api';
 import Logo, { LogoMark } from '@/components/shared/Logo';
+import WorkflowAnimation from '@/components/shared/WorkflowAnimation';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -132,34 +133,13 @@ export default function LoginPage() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: 'easeOut' }}
-          className="z-10 flex flex-col items-center gap-12 max-w-lg text-center"
+          className="z-10 flex flex-col items-center gap-10 max-w-lg text-center px-8"
         >
-          {/* Logo Mark */}
-          <motion.div
-            animate={{
-              scale: [1, 1.05, 1],
-              boxShadow: [
-                '0 0 20px rgba(139, 92, 246, 0.3)',
-                '0 0 40px rgba(139, 92, 246, 0.5)',
-                '0 0 20px rgba(139, 92, 246, 0.3)',
-              ],
-            }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-            className="w-32 h-32 bg-void-elevated rounded-full flex items-center justify-center border-2 border-neon-violet"
-          >
-            <motion.div
-              animate={{ rotate: [0, 360] }}
-              transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-            >
-              <Zap className="w-16 h-16 text-neon-cyan" fill="currentColor" />
-            </motion.div>
-          </motion.div>
-
-          <div className="space-y-4">
+          <div className="space-y-3">
             <motion.h1
               initial={{ opacity: 0, letterSpacing: '0.3em' }}
               animate={{ opacity: 1, letterSpacing: '-0.05em' }}
-              transition={{ duration: 1.2, delay: 0.3 }}
+              transition={{ duration: 1.2, delay: 0.2 }}
               className="font-headline text-5xl font-black text-neon-cyan uppercase"
             >
               ANIAD AI
@@ -167,35 +147,14 @@ export default function LoginPage() {
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.8 }}
-              className="text-xl text-void-muted font-light tracking-wide leading-relaxed"
+              transition={{ duration: 0.8, delay: 0.6 }}
+              className="text-base text-void-muted font-light tracking-wide"
             >
-              Your <span className="text-neon-pink font-bold uppercase">AI Animation Studio</span>.
-              <br />Transform images, generate videos, and bring ideas to life.
+              Watch ideas become <span className="text-neon-pink font-bold uppercase">animations</span>.
             </motion.p>
           </div>
 
-          {/* Feature Cards */}
-          <div className="grid grid-cols-3 gap-3 mt-8 w-full max-w-sm">
-            {[
-              { icon: Box, label: '2D to 3D', status: 'READY' },
-              { icon: Film, label: 'Text to Video', status: 'READY' },
-              { icon: Play, label: 'Animation', status: 'READY' },
-            ].map((feature, i) => (
-              <motion.div
-                key={feature.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 1 + i * 0.15 }}
-                whileHover={{ scale: 1.05, borderColor: 'rgba(0, 255, 255, 0.5)' }}
-                className="bg-void-elevated p-3 rounded border border-void-border transition-colors"
-              >
-                <feature.icon className="w-5 h-5 text-neon-violet mx-auto mb-2" />
-                <p className="font-label text-[9px] text-void-muted uppercase tracking-widest">{feature.label}</p>
-                <p className="font-headline text-sm text-neon-cyan">{feature.status}</p>
-              </motion.div>
-            ))}
-          </div>
+          <WorkflowAnimation />
         </motion.div>
       </section>
 

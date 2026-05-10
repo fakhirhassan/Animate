@@ -61,11 +61,11 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, AreaChart, Area, RadialBarChart, RadialBar,
 } from 'recharts';
-import { Trophy, Clock, Target, Award, TrendingDown, Sparkles } from 'lucide-react';
+import { Trophy, Clock, Target, Award, TrendingDown, Sparkles, MessageSquare } from 'lucide-react';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user, logout, token } = useAuthStore();
+  const { user, logout, token, hasHydrated } = useAuthStore();
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -92,6 +92,10 @@ export default function AdminDashboard() {
     totalConversions: 0,
   });
 
+  // Range selectors for analytics charts
+  const [activityRangeDays, setActivityRangeDays] = useState<number>(7);
+  const [growthRangeMonths, setGrowthRangeMonths] = useState<number>(6);
+
   // CRUD state
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -105,30 +109,28 @@ export default function AdminDashboard() {
     status: 'active',
   });
 
-  // Check authentication and admin role
+  // Check authentication and admin role. Wait for persist hydration first
+  // (otherwise the first render sees null user/token and bounces to /login
+  // even though localStorage has a valid session).
   useEffect(() => {
-    const checkAuth = () => {
-      if (!token || !user) {
-        router.push('/login');
-        return;
-      }
-
-      if (user.role !== 'admin') {
-        router.push('/creator');
-        return;
-      }
-
-      setIsAuthChecking(false);
-    };
-
-    checkAuth();
-  }, [token, user, router]);
+    if (!hasHydrated) return;
+    if (!token || !user) {
+      router.push('/login');
+      return;
+    }
+    if (user.role !== 'admin') {
+      router.push('/creator');
+      return;
+    }
+    setIsAuthChecking(false);
+  }, [hasHydrated, token, user, router]);
 
   useEffect(() => {
     if (!isAuthChecking && user && user.role === 'admin') {
       fetchDashboardData();
     }
-  }, [isAuthChecking, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthChecking, user, activityRangeDays, growthRangeMonths]);
 
   const fetchDashboardData = async () => {
     try {
@@ -154,34 +156,33 @@ export default function AdminDashboard() {
       console.log('👥 Users response:', usersResponse.data);
       setUsers(usersResponse?.data?.data?.users || []);
 
-      // Fetch user growth data
-      const growthResponse = await adminAPI.getUserGrowth(6);
-      console.log('📈 User growth response:', growthResponse.data);
-      setUserGrowthData(growthResponse.data.data || []);
-
-      // Fetch conversion activity data
-      const activityResponse = await adminAPI.getConversionActivity(7);
-      console.log('🎬 Conversion activity response:', activityResponse.data);
-      setConversionData(activityResponse.data.data || []);
-
-      // Analytics extras (all parallel)
-      const [roleRes, statusRes, topRes, heatRes, overviewRes] = await Promise.all([
-        adminAPI.getRoleDistribution().catch(() => ({ data: { data: [] } })),
-        adminAPI.getConversionStatus().catch(() => ({ data: { data: [] } })),
-        adminAPI.getTopCreators(5).catch(() => ({ data: { data: [] } })),
-        adminAPI.getHeatmap(7).catch(() => ({ data: { data: [] } })),
-        adminAPI.getOverview().catch(() => ({ data: { data: {} } })),
+      // All analytics in parallel — each independently caught so one failure
+      // doesn't blank out unrelated charts.
+      const [
+        growthRes, activityRes, roleRes, statusRes, topRes, heatRes, overviewRes, activitiesRes,
+      ] = await Promise.all([
+        adminAPI.getUserGrowth(growthRangeMonths).catch((e) => { console.error('userGrowth failed', e); return { data: { data: [] } }; }),
+        adminAPI.getConversionActivity(activityRangeDays).catch((e) => { console.error('conversionActivity failed', e); return { data: { data: [] } }; }),
+        adminAPI.getRoleDistribution().catch((e) => { console.error('roleDistribution failed', e); return { data: { data: [] } }; }),
+        adminAPI.getConversionStatus().catch((e) => { console.error('conversionStatus failed', e); return { data: { data: [] } }; }),
+        adminAPI.getTopCreators(5).catch((e) => { console.error('topCreators failed', e); return { data: { data: [] } }; }),
+        adminAPI.getHeatmap(activityRangeDays).catch((e) => { console.error('heatmap failed', e); return { data: { data: [] } }; }),
+        adminAPI.getOverview().catch((e) => { console.error('overview failed', e); return { data: { data: {} } }; }),
+        adminAPI.getRecentActivities(10).catch((e) => { console.error('recentActivities failed', e); return { data: { data: [] } }; }),
       ]);
+
+      console.log('[admin] activity len:', (activityRes.data?.data || []).length, activityRes.data?.data);
+      console.log('[admin] status len:', (statusRes.data?.data || []).length, statusRes.data?.data);
+      console.log('[admin] top creators len:', (topRes.data?.data || []).length, topRes.data?.data);
+      setUserGrowthData(growthRes.data?.data || []);
+      setConversionData(activityRes.data?.data || []);
       setRoleDistribution(roleRes.data?.data || []);
       setConversionStatus(statusRes.data?.data || []);
       setTopCreators(topRes.data?.data || []);
       setHeatmapData(heatRes.data?.data || []);
       if (overviewRes.data?.data) setOverview({ ...overview, ...overviewRes.data.data });
 
-      // Fetch recent activities
-      const activitiesResponse = await adminAPI.getRecentActivities(10);
-      console.log('⚡ Recent activities response:', activitiesResponse.data);
-      const activities = (activitiesResponse.data.data || []).map((activity: any) => ({
+      const activities = (activitiesRes.data?.data || []).map((activity: any) => ({
         ...activity,
         icon: activity.type === 'signup' ? UserPlus :
               activity.type === 'alert' ? AlertCircle : FileVideo
@@ -270,6 +271,67 @@ export default function AdminDashboard() {
   const handleLogout = () => {
     logout();
     router.push('/login');
+  };
+
+  const handleGenerateReport = () => {
+    // Bundle the data we already have into a CSV the admin can save / share.
+    // No new backend call — uses the same numbers shown on screen.
+    const csvEscape = (v: any) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines: string[] = [];
+    const generatedAt = new Date().toISOString();
+
+    lines.push(`MESH Admin Report,Generated ${generatedAt}`);
+    lines.push('');
+
+    lines.push('# System Overview');
+    lines.push('Metric,Value');
+    lines.push(`Total Users,${stats.totalUsers}`);
+    lines.push(`Active Users (last 7 days),${stats.activeUsers}`);
+    lines.push(`Total Projects,${stats.totalProjects}`);
+    lines.push(`System Health,${stats.systemHealth}%`);
+    lines.push(`New Users This Week,${overview.newUsersWeek} (${overview.newUsersChange >= 0 ? '+' : ''}${overview.newUsersChange}% vs last week)`);
+    lines.push(`Conversions This Week,${overview.conversionsWeek} (${overview.conversionsChange >= 0 ? '+' : ''}${overview.conversionsChange}% vs last week)`);
+    lines.push(`Success Rate,${overview.successRate}%`);
+    lines.push('');
+
+    lines.push('# User Growth (last 6 months)');
+    lines.push('Month,New Users');
+    userGrowthData.forEach((row: any) => lines.push(`${csvEscape(row.month)},${row.users ?? 0}`));
+    lines.push('');
+
+    lines.push('# Conversion Activity (last 7 days)');
+    lines.push('Day,Conversions');
+    conversionData.forEach((row: any) => lines.push(`${csvEscape(row.day)},${row.conversions ?? 0}`));
+    lines.push('');
+
+    lines.push('# User Roles');
+    lines.push('Role,Count');
+    roleDistribution.forEach((row: any) => lines.push(`${csvEscape(row.name)},${row.value ?? 0}`));
+    lines.push('');
+
+    lines.push('# Conversion Status Breakdown');
+    lines.push('Status,Count');
+    conversionStatus.forEach((row: any) => lines.push(`${csvEscape(row.name)},${row.value ?? 0}`));
+    lines.push('');
+
+    lines.push('# Top Creators');
+    lines.push('Name,Email,Conversions');
+    topCreators.forEach((row: any) =>
+      lines.push(`${csvEscape(row.name)},${csvEscape(row.email)},${row.count ?? 0}`),
+    );
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mesh-admin-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   // CRUD Handlers
@@ -392,14 +454,24 @@ export default function AdminDashboard() {
               Welcome back, {user?.name}. System diagnostics and user management.
             </p>
           </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            className="group"
-          >
-            <span className="hidden sm:inline font-label text-xs uppercase tracking-widest">{user?.name}</span>
-            <LogOut className="h-4 w-4 ml-2 group-hover:translate-x-0.5 transition-transform" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => router.push('/admin/feedback')}
+              variant="outline"
+              className="group"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline font-label text-xs uppercase tracking-widest">Feedback & Ratings</span>
+            </Button>
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              className="group"
+            >
+              <span className="hidden sm:inline font-label text-xs uppercase tracking-widest">{user?.name}</span>
+              <LogOut className="h-4 w-4 ml-2 group-hover:translate-x-0.5 transition-transform" />
+            </Button>
+          </div>
         </motion.div>
 
         {/* Stats Grid */}
@@ -468,7 +540,23 @@ export default function AdminDashboard() {
                   <h3 className="text-xl font-headline font-bold text-foreground uppercase tracking-tight mb-1">User Growth</h3>
                   <p className="text-muted text-sm">Monthly user acquisition trend</p>
                 </div>
-                <BarChart3 className="h-6 w-6 text-primary" />
+                <div className="flex items-center gap-3">
+                  <Select
+                    value={String(growthRangeMonths)}
+                    onValueChange={(v) => setGrowthRangeMonths(Number(v))}
+                  >
+                    <SelectTrigger className="w-32 bg-input border-border text-foreground text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-surface border-border">
+                      <SelectItem value="3">Last 3 months</SelectItem>
+                      <SelectItem value="6">Last 6 months</SelectItem>
+                      <SelectItem value="12">Last 12 months</SelectItem>
+                      <SelectItem value="24">Last 24 months</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <BarChart3 className="h-6 w-6 text-primary" />
+                </div>
               </div>
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={userGrowthData}>
@@ -511,10 +599,27 @@ export default function AdminDashboard() {
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-headline font-bold text-foreground uppercase tracking-tight mb-1">2D to 3D Conversions</h3>
-                  <p className="text-muted text-sm">Weekly conversion activity</p>
+                  <h3 className="text-xl font-headline font-bold text-foreground uppercase tracking-tight mb-1">Conversions</h3>
+                  <p className="text-muted text-sm">Conversion activity over time</p>
                 </div>
-                <TrendingUp className="h-6 w-6 text-accent" />
+                <div className="flex items-center gap-3">
+                  <Select
+                    value={String(activityRangeDays)}
+                    onValueChange={(v) => setActivityRangeDays(Number(v))}
+                  >
+                    <SelectTrigger className="w-32 bg-input border-border text-foreground text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-surface border-border">
+                      <SelectItem value="7">Last week</SelectItem>
+                      <SelectItem value="14">Last 2 weeks</SelectItem>
+                      <SelectItem value="30">Last month</SelectItem>
+                      <SelectItem value="90">Last 3 months</SelectItem>
+                      <SelectItem value="180">Last 6 months</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <TrendingUp className="h-6 w-6 text-accent" />
+                </div>
               </div>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={conversionData}>
@@ -559,13 +664,17 @@ export default function AdminDashboard() {
                 Quick Actions
               </h3>
               <div className="space-y-3">
-                <Button className="w-full justify-start">
-                  <Video className="h-4 w-4 mr-2" />
-                  View All Projects
-                </Button>
-                <Button className="w-full justify-start">
+                <Button className="w-full justify-start" onClick={handleGenerateReport}>
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Generate Report
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start border-border"
+                  onClick={() => router.push('/admin/feedback')}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Feedback & Ratings
                 </Button>
               </div>
             </motion.div>
@@ -623,7 +732,7 @@ export default function AdminDashboard() {
                 <Activity className="h-5 w-5 text-primary" />
                 Recent Activity
               </h3>
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[640px] overflow-y-auto pr-1">
                 {recentActivities.map((activity, index) => {
                   const Icon = activity.icon;
                   return (
@@ -810,7 +919,7 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-xl font-headline font-bold text-foreground uppercase tracking-tight mb-1">Activity Heatmap</h3>
-              <p className="text-muted text-sm">Conversions by day & hour (last 7 days)</p>
+              <p className="text-muted text-sm">Conversions by day & hour (last {activityRangeDays} days)</p>
             </div>
             <Clock className="h-6 w-6 text-primary" />
           </div>

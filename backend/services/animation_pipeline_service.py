@@ -294,8 +294,13 @@ def generate_animation_from_image(
     voice_preset: str = "af_heart",
 ) -> Dict[str, Any]:
     """
-    Pipeline for image-to-animation with optional voice.
-    Note: I2V requires Wan2.2-TI2V-5B. Without it, generates T2V from text description.
+    Image-to-Animation pipeline.
+
+    Sends the user's image + text prompt to the Wan2.2 I2V worker on RunPod
+    (the local Wan2.1-1.3B model is text-only and cannot ingest an image).
+    Then attaches optional voice narration on top.
+
+    `image` is a PIL.Image.Image opened by the route.
     """
     ensure_dirs()
     job_id = str(uuid.uuid4())[:8]
@@ -304,11 +309,28 @@ def generate_animation_from_image(
 
     logger.info(f"[{job_id}] Starting image-to-animation pipeline...")
 
-    # Generate video from text prompt (I2V not available without Wan2.2-5B)
-    from services.video_generation_service import generate_video_from_text
-    prompt = text if text.strip() else "A scene with smooth cinematic motion, high quality animation"
+    from services.cloud_gpu_service import (
+        generate_video_from_image_cloud, is_cloud_configured,
+    )
+
+    if not is_cloud_configured():
+        raise RuntimeError(
+            "Image-to-Video requires the cloud GPU worker (Wan2.2 I2V). "
+            "Set RUNPOD_API_KEY and RUNPOD_ENDPOINT_ID in backend/.env, or "
+            "switch to the text-only animation flow."
+        )
+
+    # Encode the PIL image to base64 PNG for the worker.
+    import io, base64 as _b64
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    image_b64 = _b64.b64encode(buf.getvalue()).decode("ascii")
+
+    prompt = text.strip() or "smooth cinematic motion, consistent lighting, high quality"
+
     try:
-        video_result = generate_video_from_text(
+        video_result = generate_video_from_image_cloud(
+            image_b64=image_b64,
             prompt=prompt,
             num_frames=num_frames,
             num_inference_steps=num_inference_steps,
@@ -316,8 +338,8 @@ def generate_animation_from_image(
         )
         video_path = video_result["filepath"]
     except Exception as e:
-        logger.error(f"[{job_id}] Video generation failed: {e}")
-        raise RuntimeError(f"Video generation failed: {e}")
+        logger.error(f"[{job_id}] Cloud I2V failed: {e}")
+        raise RuntimeError(f"Image-to-Video generation failed: {e}")
 
     # Unload video model before loading TTS
     from services.video_generation_service import unload_model as unload_video
@@ -642,10 +664,14 @@ def _concat_videos_with_crossfade(
         return
 
     durations = [_probe_duration(p) for p in video_paths]
+    for i, (p, d) in enumerate(zip(video_paths, durations)):
+        logger.info(f"  clip {i+1}/{len(video_paths)}: {os.path.basename(p)} = {d:.2f}s")
     if any(d <= 0 for d in durations):
         logger.warning(f"Could not probe all clips, falling back to simple concat")
         _concat_videos_simple(video_paths, output_path, os.path.dirname(output_path))
         return
+    expected_total = sum(durations) - crossfade * (len(video_paths) - 1)
+    logger.info(f"Expected stitched duration: {expected_total:.2f}s (crossfade={crossfade}s)")
 
     # Clamp crossfade so it never exceeds the shortest clip.
     min_dur = min(durations)
@@ -693,7 +719,20 @@ def _concat_videos_with_crossfade(
         _concat_videos_simple(video_paths, output_path, os.path.dirname(output_path))
         return
 
-    logger.info(f"Crossfaded {len(video_paths)} videos → {output_path}")
+    out_duration = _probe_duration(output_path)
+    logger.info(f"Crossfaded {len(video_paths)} videos → {output_path} ({out_duration:.2f}s)")
+
+    # Sanity check: stitched output should be at least as long as the
+    # longest single clip. If it's shorter, something silently truncated
+    # (xfade offset miscalc, or a one-clip-only path that lost frames).
+    longest_clip = max(durations)
+    if out_duration + 0.1 < longest_clip:
+        logger.error(
+            f"Stitched output ({out_duration:.2f}s) is shorter than the "
+            f"longest input clip ({longest_clip:.2f}s) — falling back to "
+            f"simple concat to recover."
+        )
+        _concat_videos_simple(video_paths, output_path, os.path.dirname(output_path))
 
 
 def _concat_videos_simple(video_paths: List[str], output_path: str, job_dir: str):
@@ -720,16 +759,48 @@ def _concat_videos_simple(video_paths: List[str], output_path: str, job_dir: str
 
 
 def _merge_video_audio(video_path: str, audio_path: str, output_path: str):
-    """Merge a video file with an audio file using ffmpeg."""
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", video_path,
-        "-i", audio_path,
-        "-c:v", "copy",
-        "-c:a", "aac",
-        "-shortest",
-        output_path
-    ]
+    """Merge a video file with an audio file.
+
+    The video is the "source of truth" for length — we never truncate it.
+    If the audio is shorter, we pad with silence so it plays once at the
+    start and the rest of the video continues. If the audio is longer, we
+    trim it to the video length (otherwise the player would freeze on the
+    last frame while audio kept going).
+
+    Why not `-shortest`: when narration is short (e.g. "Hello." → 1s) and
+    the video is 5s, `-shortest` truncates the *video* to 1s, which is the
+    bug we used to hit.
+    """
+    video_duration = _probe_duration(video_path)
+    audio_duration = _probe_duration(audio_path)
+
+    if video_duration <= 0:
+        # Fallback to old behaviour if we can't probe — better than failing.
+        logger.warning("Could not probe video duration, merging without padding")
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path, "-i", audio_path,
+            "-c:v", "copy", "-c:a", "aac",
+            "-map", "0:v:0", "-map", "1:a:0",
+            output_path,
+        ]
+    else:
+        # apad pads the audio with silence to infinity; then we cap with
+        # -t at the video duration. Result: audio length == video length,
+        # video frames untouched.
+        logger.info(
+            f"Merging video ({video_duration:.2f}s) with audio "
+            f"({audio_duration:.2f}s) → output will be {video_duration:.2f}s"
+        )
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path, "-i", audio_path,
+            "-filter_complex", "[1:a]apad[a]",
+            "-map", "0:v:0", "-map", "[a]",
+            "-c:v", "copy", "-c:a", "aac",
+            "-t", f"{video_duration:.3f}",
+            output_path,
+        ]
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if result.returncode != 0:
@@ -739,7 +810,13 @@ def _merge_video_audio(video_path: str, audio_path: str, output_path: str):
     if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
         raise RuntimeError("FFmpeg merge produced empty output file")
 
-    logger.info(f"Merged video + audio → {output_path}")
+    out_duration = _probe_duration(output_path)
+    logger.info(f"Merged video + audio → {output_path} ({out_duration:.2f}s)")
+    if video_duration > 0 and out_duration < video_duration * 0.9:
+        logger.error(
+            f"Merge truncated output: expected ~{video_duration:.2f}s, got "
+            f"{out_duration:.2f}s — investigate audio padding"
+        )
 
 
 def _copy_file(src: str, dst: str):

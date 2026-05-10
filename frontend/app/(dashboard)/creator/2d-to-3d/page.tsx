@@ -11,8 +11,10 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import RatingDialog, { useHasRated } from '@/components/shared/RatingDialog';
 import ImageUploader from '@/components/creator/ImageUploader';
 import ConversionSettings, {
   ConversionSettingsData,
@@ -21,6 +23,7 @@ import ConversionHistory, {
   ConversionHistoryItem,
 } from '@/components/creator/ConversionHistory';
 import { conversionAPI } from '@/lib/api';
+import { useGenerationStore } from '@/store/generationStore';
 import { withAuth } from '@/lib/utils';
 
 const ModelViewer = dynamic(() => import('@/components/creator/ModelViewer'), {
@@ -62,11 +65,29 @@ export default function TwoDToThreeDPage() {
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
   const [history, setHistory] = useState<ConversionHistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const [latestConversionId, setLatestConversionId] = useState<string | undefined>();
+  const hasRated = useHasRated('2d-to-3d', latestConversionId);
+
+  // Subscribe to the global 3D job so the conversion survives navigation.
+  const job3d = useGenerationStore((s) => s.jobs['3d']);
+  const runJob = useGenerationStore((s) => s.run);
+  const resetJob = useGenerationStore((s) => s.reset);
+
+  useEffect(() => {
+    if (job3d.status === 'success' && job3d.result?.modelUrl) {
+      setModelUrl(job3d.result.modelUrl);
+      setConversion({ status: 'completed', progress: 100, message: 'Conversion complete!' });
+    } else if (job3d.status === 'error') {
+      setConversion({ status: 'error', progress: 0, message: job3d.error || 'Conversion failed' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job3d.status, job3d.finishedAt]);
 
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const response = await conversionAPI.getHistory({ limit: 10 });
+        const response = await conversionAPI.getHistory({ limit: 10, type: '3d' });
         const conversions = response.data.data.conversions || [];
         const historyItems: ConversionHistoryItem[] = conversions.map((conv: any) => ({
           id: conv.id,
@@ -101,8 +122,8 @@ export default function TwoDToThreeDPage() {
     setModelUrl(null);
   }, []);
 
-  const performConversion = async () => {
-    if (!selectedFile) return;
+  const performConversion = async (): Promise<{ modelUrl: string }> => {
+    if (!selectedFile) throw new Error('No file selected');
     try {
       const formData = new FormData();
       formData.append('file', selectedFile.file);
@@ -166,7 +187,7 @@ export default function TwoDToThreeDPage() {
         const downloadUrl = withAuth(`${BACKEND_URL}${result.data.download_url}`);
         setModelUrl(downloadUrl);
         try {
-          const historyResponse = await conversionAPI.getHistory({ limit: 10 });
+          const historyResponse = await conversionAPI.getHistory({ limit: 10, type: '3d' });
           const conversions = historyResponse.data.data.conversions || [];
           const historyItems: ConversionHistoryItem[] = conversions.map((conv: any) => ({
             id: conv.id, originalImage: `http://localhost:5001${conv.original_image_url}`,
@@ -176,17 +197,25 @@ export default function TwoDToThreeDPage() {
             method: conv.settings?.method,
           }));
           setHistory(historyItems);
+          if (historyItems.length > 0) setLatestConversionId(historyItems[0].id);
         } catch (historyError) {
           console.error('Failed to reload history:', historyError);
         }
+        return { modelUrl: downloadUrl };
       }
+      throw new Error('Conversion succeeded but no download URL was returned');
     } catch (error) {
       console.error('Conversion error:', error);
       setConversion({ status: 'error', progress: 0, message: error instanceof Error ? error.message : 'Conversion failed. Please try again.' });
+      throw error;
     }
   };
 
-  const handleConvert = () => { performConversion(); };
+  const handleConvert = () => {
+    if (!selectedFile) return;
+    resetJob('3d');
+    runJob('3d', selectedFile.file.name, performConversion).catch(() => {});
+  };
 
   const handleDownload = () => {
     if (modelUrl) {
@@ -378,9 +407,23 @@ export default function TwoDToThreeDPage() {
               transition={{ delay: 0.1 }}
               className="bg-surface border border-border rounded-lg p-6 bloom-shadow"
             >
-              <h2 className="font-headline text-sm font-bold text-foreground mb-4 uppercase tracking-tight">
-                3D Model Preview
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-headline text-sm font-bold text-foreground uppercase tracking-tight">
+                  3D Model Preview
+                </h2>
+                {conversion.status === 'completed' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRatingOpen(true)}
+                    disabled={hasRated}
+                    className="border-border"
+                  >
+                    <Star className={`h-4 w-4 mr-2 ${hasRated ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                    {hasRated ? 'Rated' : 'Rate'}
+                  </Button>
+                )}
+              </div>
               <ModelViewer
                 modelUrl={conversion.status === 'completed' ? modelUrl : null}
                 originalImage={selectedFile?.preview}
@@ -406,6 +449,13 @@ export default function TwoDToThreeDPage() {
           </div>
         </div>
       </div>
+
+      <RatingDialog
+        open={ratingOpen}
+        onOpenChange={setRatingOpen}
+        featureType="2d-to-3d"
+        conversionId={latestConversionId}
+      />
     </div>
   );
 }

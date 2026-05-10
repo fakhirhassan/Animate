@@ -191,6 +191,41 @@ export const adminAPI = {
     api.get('/admin/analytics/heatmap', { params: { days } }),
 
   getOverview: () => api.get('/admin/analytics/overview'),
+
+  // Feedback & Ratings (admin)
+  getFeedback: (params?: { limit?: number; offset?: number; status?: string; category?: string }) =>
+    api.get('/admin/feedback', { params }),
+
+  updateFeedback: (id: string, data: { status?: string; admin_notes?: string }) =>
+    api.put(`/admin/feedback/${id}`, data),
+
+  getFeedbackSummary: () => api.get('/admin/feedback/summary'),
+
+  getRatings: (params?: { limit?: number; offset?: number; feature_type?: string; min_rating?: number }) =>
+    api.get('/admin/ratings', { params }),
+
+  getRatingsSummary: () => api.get('/admin/ratings/summary'),
+};
+
+// Feedback & Ratings (user)
+export type FeatureType = 't2v' | 't2i' | '2d-to-3d' | 'tts' | 'video-edit';
+
+export const feedbackAPI = {
+  submitRating: (data: {
+    feature_type: FeatureType;
+    rating: number;
+    conversion_id?: string;
+    comment?: string;
+  }) => api.post('/feedback/ratings', data),
+
+  submitFeedback: (data: {
+    subject: string;
+    message: string;
+    category?: 'bug' | 'suggestion' | 'praise' | 'other';
+    conversion_id?: string;
+  }) => api.post('/feedback/', data),
+
+  getMine: () => api.get('/feedback/my'),
 };
 
 // Conversion API (2D to 3D)

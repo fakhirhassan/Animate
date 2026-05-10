@@ -12,9 +12,12 @@ import {
   RefreshCw,
   Settings2,
   ChevronDown,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { imageAPI, conversionAPI } from '@/lib/api';
+import { useGenerationStore } from '@/store/generationStore';
+import RatingDialog, { useHasRated } from '@/components/shared/RatingDialog';
 
 interface ImageHistoryItem {
   id: string;
@@ -49,11 +52,33 @@ export default function TextToImagePage() {
   const [resolution, setResolution] = useState(RESOLUTIONS[0]);
   const [steps, setSteps] = useState(25);
   const [imageHistory, setImageHistory] = useState<ImageHistoryItem[]>([]);
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const hasRated = useHasRated('t2i', generatedImage || undefined);
+
+  // Subscribe to the global image job so navigation away & back doesn't
+  // reset the in-flight request.
+  const imageJob = useGenerationStore((s) => s.jobs.image);
+  const runImageJob = useGenerationStore((s) => s.run);
+  const resetImageJob = useGenerationStore((s) => s.reset);
 
   useEffect(() => {
     checkAvailability();
     loadHistory();
   }, []);
+
+  useEffect(() => {
+    if (imageJob.status === 'running') {
+      setIsGenerating(true);
+      setError('');
+    } else if (imageJob.status === 'success' && imageJob.result?.image_url) {
+      setIsGenerating(false);
+      setGeneratedImage(`${BACKEND_URL}${imageJob.result.image_url}`);
+    } else if (imageJob.status === 'error') {
+      setIsGenerating(false);
+      setError(imageJob.error || 'Image generation failed');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageJob.status, imageJob.finishedAt]);
 
   const loadHistory = async () => {
     try {
@@ -90,32 +115,32 @@ export default function TextToImagePage() {
       return;
     }
 
-    setIsGenerating(true);
     setError('');
     setGeneratedImage(null);
+    resetImageJob('image');
+
+    const submitPrompt = prompt.trim();
+    const submitResolution = resolution;
+    const submitSteps = steps;
 
     try {
-      const response = await imageAPI.generate({
-        prompt: prompt.trim(),
-        width: resolution.width,
-        height: resolution.height,
-        num_inference_steps: steps,
+      await runImageJob('image', submitPrompt, async () => {
+        const response = await imageAPI.generate({
+          prompt: submitPrompt,
+          width: submitResolution.width,
+          height: submitResolution.height,
+          num_inference_steps: submitSteps,
+        });
+        const result = response?.data?.data;
+        if (!result?.image_url) {
+          throw new Error('No image returned from server');
+        }
+        return result;
       });
-
-      const result = response?.data?.data;
-      if (result?.image_url) {
-        const fullUrl = `${BACKEND_URL}${result.image_url}`;
-        setGeneratedImage(fullUrl);
-        // Backend persisted the row; refetch so the new item shows up with its DB id.
-        loadHistory();
-      } else {
-        setError('No image returned from server');
-      }
-    } catch (err: any) {
-      const message = err?.response?.data?.message || 'Image generation failed. Is cloud GPU configured?';
-      setError(message);
-    } finally {
-      setIsGenerating(false);
+      // Refresh history; effect above mirrors result into local state.
+      loadHistory();
+    } catch {
+      // Error captured in store; effect above syncs it to local state.
     }
   };
 
@@ -299,6 +324,15 @@ export default function TextToImagePage() {
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Regenerate
                     </Button>
+                    <Button
+                      onClick={() => setRatingOpen(true)}
+                      disabled={hasRated}
+                      variant="outline"
+                      className="border-white/20 text-gray-300 hover:bg-white/10"
+                    >
+                      <Star className={`h-4 w-4 mr-2 ${hasRated ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                      {hasRated ? 'Rated' : 'Rate'}
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -333,6 +367,13 @@ export default function TextToImagePage() {
           </motion.div>
         </div>
       </div>
+
+      <RatingDialog
+        open={ratingOpen}
+        onOpenChange={setRatingOpen}
+        featureType="t2i"
+        itemKey={generatedImage || undefined}
+      />
     </div>
   );
 }

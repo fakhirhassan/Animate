@@ -17,9 +17,12 @@ import {
   Film,
   Volume2,
   VolumeX,
+  Trash2,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { conversionAPI, editAPI } from '@/lib/api';
+import RatingDialog, { useHasRated } from '@/components/shared/RatingDialog';
 
 interface SourceVideo {
   // Either an existing asset (id set, source_url undefined)
@@ -71,11 +74,14 @@ export default function VideoEditPage() {
 
   // Render state
   const [rendering, setRendering] = useState(false);
-  const [rendered, setRendered] = useState<{ url: string; filename: string } | null>(null);
+  const [rendered, setRendered] = useState<{ url: string; filename: string; conversionId?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Source upload state
   const [sourceUploading, setSourceUploading] = useState(false);
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const hasRated = useHasRated('video-edit', rendered?.conversionId || rendered?.url);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const musicInputRef = useRef<HTMLInputElement>(null);
@@ -205,6 +211,7 @@ export default function VideoEditPage() {
         setRendered({
           url: `${BACKEND_URL}${data.output_url}`,
           filename: data.filename,
+          conversionId: data.conversion_id,
         });
       } else {
         setError('No output returned');
@@ -213,6 +220,26 @@ export default function VideoEditPage() {
       setError(err?.response?.data?.message || err?.message || 'Render failed');
     } finally {
       setRendering(false);
+    }
+  };
+
+  const handleDeleteRendered = async () => {
+    if (!rendered) return;
+    if (!confirm('Delete this edited video? This cannot be undone.')) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      if (rendered.conversionId) {
+        await conversionAPI.deleteConversion(rendered.conversionId);
+      }
+      setRendered(null);
+      // Refresh source list in case the deleted edit was showing as a source.
+      loadVideos();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Delete failed');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -289,6 +316,23 @@ export default function VideoEditPage() {
                   </div>
                   <video src={rendered.url} controls autoPlay className="w-full" />
                   <div className="p-3 flex items-center justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleDeleteRendered}
+                      disabled={deleting}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      {deleting ? (
+                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Deleting…</>
+                      ) : (
+                        <><Trash2 className="h-3 w-3 mr-1" /> Delete</>
+                      )}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setRatingOpen(true)} disabled={hasRated}>
+                      <Star className={`h-3 w-3 mr-1 ${hasRated ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                      {hasRated ? 'Rated' : 'Rate'}
+                    </Button>
                     <a href={rendered.url} download={rendered.filename}>
                       <Button size="sm" variant="outline">Download</Button>
                     </a>
@@ -462,6 +506,14 @@ export default function VideoEditPage() {
           </div>
         )}
       </div>
+
+      <RatingDialog
+        open={ratingOpen}
+        onOpenChange={setRatingOpen}
+        featureType="video-edit"
+        conversionId={rendered?.conversionId}
+        itemKey={rendered?.conversionId || rendered?.url}
+      />
     </div>
   );
 }

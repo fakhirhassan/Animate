@@ -60,6 +60,28 @@ def _probe_duration(path: str) -> float:
         return 0.0
 
 
+def _probe_has_audio(path: str) -> bool:
+    """Return True iff the file contains at least one audio stream.
+
+    Wan-generated videos and many T2V outputs have no audio track. Referencing
+    [0:a] in a filter graph against such a file makes FFmpeg abort.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "a",
+                "-show_entries", "stream=index",
+                "-of", "csv=p=0",
+                path,
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        return bool(result.stdout.strip())
+    except Exception:
+        return False
+
+
 def _build_crop_expr(aspect: str) -> Optional[str]:
     """Build an FFmpeg crop filter expression for a target aspect ratio.
 
@@ -119,6 +141,7 @@ def render_edit(
         raise ValueError(f"Unknown aspect '{aspect}'. Allowed: {list(ASPECT_RATIOS)}")
 
     src_duration = _probe_duration(src)
+    src_has_audio = _probe_has_audio(src)
     if trim_start < 0:
         trim_start = 0.0
     if trim_end is None or trim_end <= 0:
@@ -164,9 +187,10 @@ def render_edit(
     video_filters.append("format=yuv420p")
     filter_parts.append(f"[0:v]{','.join(video_filters)}[vout]")
 
-    # Audio chain.
+    # Audio chain. Skip [0:a] entirely when the source has no audio track,
+    # otherwise FFmpeg aborts with "Stream specifier ':a' ... matches no streams".
     audio_streams: List[str] = []
-    if keep_original_audio:
+    if keep_original_audio and src_has_audio:
         v = max(0.0, min(2.0, original_audio_volume))
         filter_parts.append(f"[0:a]volume={v}[a0]")
         audio_streams.append("[a0]")

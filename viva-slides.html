@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ANIAD — Final Year Project</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#080810;
+    --deep:#0e0e1a;
+    --surface:#111124;
+    --elev:#1A1A35;
+    --border:#2A2A4A;
+    --muted:#C8C8E8;
+    --text:#FFFFFF;
+    --violet:#6D28D9;
+    --cyan:#10F0B0;
+    --pink:#F000FF;
+    --danger:#FF3B5C;
+    --warning:#FFAA00;
+    --success:#00E096;
+    --headline:'Orbitron','Inter',sans-serif;
+    --body:'DM Sans','Inter',sans-serif;
+    --label:'Space Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--body);overflow:hidden}
+  body{
+    background:
+      radial-gradient(900px 600px at 15% 10%, rgba(109,40,217,.18), transparent 60%),
+      radial-gradient(700px 500px at 85% 90%, rgba(16,240,176,.10), transparent 60%),
+      radial-gradient(500px 400px at 60% 30%, rgba(240,0,255,.08), transparent 65%),
+      var(--bg);
+  }
+  /* dot grid */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:radial-gradient(rgba(238,238,255,.05) 1px, transparent 1px);
+    background-size:22px 22px;
+    mask-image:radial-gradient(ellipse at center, black 50%, transparent 90%);
+  }
+
+  /* slide deck container */
+  .deck{position:relative;width:100vw;height:100vh;z-index:1}
+  .slide{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;justify-content:center;
+    padding:64px 88px;
+    opacity:0;visibility:hidden;
+    transform:translateY(20px) scale(.985);
+    transition:opacity .55s ease, transform .55s ease, visibility 0s linear .55s;
+  }
+  .slide.active{opacity:1;visibility:visible;transform:none;transition:opacity .55s ease, transform .55s ease, visibility 0s linear 0s;}
+
+  /* HUD */
+  .hud{
+    position:fixed;left:0;right:0;bottom:0;top:0;pointer-events:none;z-index:50;
+  }
+  .hud .corner{
+    position:absolute;font-family:var(--label);font-size:11px;letter-spacing:.25em;
+    text-transform:uppercase;color:var(--muted);padding:14px 22px;
+  }
+  .hud .tl{top:0;left:0}
+  .hud .tr{top:0;right:0}
+  .hud .bl{bottom:0;left:0}
+  .hud .br{bottom:0;right:0;color:var(--cyan)}
+  .progress{
+    position:fixed;left:88px;right:88px;bottom:34px;height:2px;background:rgba(238,238,255,.06);
+    z-index:40;border-radius:99px;overflow:hidden
+  }
+  .progress > span{display:block;height:100%;background:linear-gradient(90deg,var(--violet),var(--cyan));width:0%;transition:width .5s ease}
+
+  .nav{
+    position:fixed;right:28px;bottom:28px;display:flex;gap:8px;z-index:60;pointer-events:auto
+  }
+  .nav button{
+    width:42px;height:42px;border-radius:50%;background:rgba(26,26,53,.7);
+    backdrop-filter:blur(8px);border:1px solid var(--border);color:var(--text);
+    cursor:pointer;font-family:var(--label);font-size:14px;transition:.2s
+  }
+  .nav button:hover{border-color:var(--cyan);color:var(--cyan);transform:translateY(-2px)}
+
+  /* typography */
+  h1.title{font-family:var(--headline);font-weight:900;line-height:.95;letter-spacing:-.03em}
+  h2.h{font-family:var(--headline);font-weight:800;letter-spacing:-.02em;font-size:54px;line-height:1.05;margin-bottom:8px}
+  .eyebrow{
+    display:inline-block;font-family:var(--label);font-size:11px;
+    letter-spacing:.35em;text-transform:uppercase;color:var(--cyan);
+    padding:6px 14px;border:1px solid rgba(16,240,176,.4);border-radius:99px;
+    background:rgba(16,240,176,.06);margin-bottom:22px
+  }
+  .lede{color:#E8E8FF;font-size:18px;max-width:780px;line-height:1.6;font-weight:400}
+  .accent{color:var(--cyan)}
+  .violet{color:#a78bfa}
+  .pink{color:var(--pink)}
+  .num{font-family:var(--headline);color:var(--cyan);font-weight:900}
+
+  /* cards */
+  .grid{display:grid;gap:18px}
+  .card{
+    background:linear-gradient(180deg, rgba(26,26,53,.55), rgba(17,17,36,.55));
+    border:1px solid var(--border);border-radius:18px;padding:22px 22px;
+    backdrop-filter:blur(8px);
+    transition:.25s;position:relative;overflow:hidden;
+  }
+  .card:hover{transform:translateY(-3px);border-color:rgba(16,240,176,.45)}
+  .card::after{
+    content:"";position:absolute;inset:0;border-radius:18px;pointer-events:none;
+    background:radial-gradient(400px circle at var(--mx,50%) var(--my,0%), rgba(16,240,176,.08), transparent 40%);
+    opacity:0;transition:opacity .3s
+  }
+  .card:hover::after{opacity:1}
+  .card .ico{font-family:var(--headline);font-size:22px;color:var(--cyan)}
+  .card h3{font-family:var(--headline);font-size:18px;margin:8px 0 6px;letter-spacing:-.01em}
+  .card p{color:#E0E0F5;font-size:14px;line-height:1.6}
+  .card .tag{
+    font-family:var(--label);font-size:10px;letter-spacing:.2em;color:var(--cyan);
+    text-transform:uppercase;opacity:.95
+  }
+
+  .pill{
+    display:inline-block;padding:5px 11px;border-radius:99px;
+    font-family:var(--label);font-size:11px;letter-spacing:.15em;text-transform:uppercase;
+    border:1px solid var(--border);color:#D8D8F0;margin-right:6px;margin-bottom:6px
+  }
+  .pill.cyan{color:var(--cyan);border-color:rgba(16,240,176,.45);background:rgba(16,240,176,.07)}
+  .pill.violet{color:#c4b5fd;border-color:rgba(109,40,217,.5);background:rgba(109,40,217,.1)}
+  .pill.pink{color:var(--pink);border-color:rgba(240,0,255,.45);background:rgba(240,0,255,.07)}
+
+  /* slide 1 — cover */
+  .cover{align-items:flex-start;justify-content:center}
+  .cover h1{font-size:clamp(72px,11vw,168px);margin-top:24px;margin-bottom:16px}
+  .cover h1 .glow{
+    background:linear-gradient(90deg,#fff 0%, #c4b5fd 40%, var(--cyan) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 60px rgba(16,240,176,.18);
+  }
+  .cover .sub{font-family:var(--headline);font-weight:600;font-size:22px;color:#D8D8F0;letter-spacing:.05em}
+  .cover .meta{margin-top:36px;display:flex;gap:28px;font-family:var(--label);font-size:12px;letter-spacing:.25em;text-transform:uppercase;color:#D0D0E8}
+  .cover .meta b{color:var(--text);font-weight:400}
+  .ring{
+    position:absolute;right:-180px;top:50%;transform:translateY(-50%);
+    width:760px;height:760px;border-radius:50%;
+    background:conic-gradient(from 90deg, transparent, rgba(109,40,217,.4), transparent 50%, rgba(16,240,176,.4), transparent);
+    filter:blur(2px);opacity:.55;
+    animation:spin 28s linear infinite;
+    mask:radial-gradient(circle, transparent 280px, black 282px, black 360px, transparent 362px);
+    -webkit-mask:radial-gradient(circle, transparent 280px, black 282px, black 360px, transparent 362px);
+  }
+  .ring.inner{width:520px;height:520px;right:-60px;animation-duration:18s;animation-direction:reverse;
+    mask:radial-gradient(circle, transparent 200px, black 202px, black 250px, transparent 252px);
+    -webkit-mask:radial-gradient(circle, transparent 200px, black 202px, black 250px, transparent 252px);
+    opacity:.6
+  }
+  @keyframes spin{to{transform:translateY(-50%) rotate(360deg)}}
+
+  /* slide 2 — problem/solution */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:start}
+
+  /* slide architecture diagram */
+  .arch{
+    margin-top:24px;display:grid;grid-template-columns:1fr auto 1fr;gap:24px;align-items:stretch
+  }
+  .arch-block{
+    border:1px solid var(--border);border-radius:18px;padding:22px;
+    background:linear-gradient(180deg,rgba(26,26,53,.6),rgba(17,17,36,.4));backdrop-filter:blur(6px);
+    position:relative
+  }
+  .arch-block.local::before, .arch-block.cloud::before{
+    content:"";position:absolute;left:0;top:18px;bottom:18px;width:3px;border-radius:2px;
+  }
+  .arch-block.local::before{background:linear-gradient(180deg,var(--cyan),transparent)}
+  .arch-block.cloud::before{background:linear-gradient(180deg,var(--pink),transparent)}
+  .arch-block h4{font-family:var(--headline);font-size:14px;letter-spacing:.2em;text-transform:uppercase;color:var(--text);margin-bottom:4px}
+  .arch-block .where{font-family:var(--label);font-size:11px;letter-spacing:.2em;color:var(--cyan);text-transform:uppercase;margin-bottom:14px;opacity:.85}
+  .arch-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px dashed rgba(238,238,255,.08);font-size:13px}
+  .arch-row:first-of-type{border-top:0}
+  .arch-row .dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+  .arch-block.cloud .arch-row .dot{background:var(--pink);box-shadow:0 0 10px var(--pink)}
+  .arch-row{color:#F0F0FF}
+  .arch-row .lbl{font-family:var(--label);color:#A8A8D8;font-size:11px;letter-spacing:.15em;text-transform:uppercase;margin-left:auto}
+  .arrow-col{display:flex;flex-direction:column;justify-content:center;align-items:center;color:#D0D0E8;font-family:var(--label);font-size:11px;letter-spacing:.2em}
+  .arrow{
+    width:48px;height:1px;background:linear-gradient(90deg,var(--cyan),var(--pink));position:relative;margin:8px 0
+  }
+  .arrow::after{content:"";position:absolute;right:-4px;top:-3px;width:0;height:0;border-left:8px solid var(--pink);border-top:4px solid transparent;border-bottom:4px solid transparent}
+
+  /* pipeline strip */
+  .pipe{
+    margin-top:28px;display:flex;align-items:stretch;gap:0;border:1px solid var(--border);border-radius:14px;
+    overflow:hidden;background:rgba(8,8,16,.6)
+  }
+  .pipe .step{flex:1;padding:18px 16px;border-right:1px solid var(--border);position:relative}
+  .pipe .step:last-child{border-right:0}
+  .pipe .step .n{font-family:var(--label);font-size:10px;letter-spacing:.3em;color:var(--cyan);text-transform:uppercase}
+  .pipe .step .name{font-family:var(--headline);font-size:14px;margin-top:6px;letter-spacing:.04em}
+  .pipe .step .model{font-family:var(--label);font-size:11px;color:#D0D0E8;margin-top:6px;line-height:1.4}
+  .pipe .step::after{
+    content:"›";position:absolute;right:-9px;top:50%;transform:translateY(-50%);
+    color:var(--cyan);font-size:22px;background:var(--bg);padding:0 4px;line-height:1;z-index:2
+  }
+  .pipe .step:last-child::after{display:none}
+
+  /* feature 4-grid */
+  .feat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:18px}
+  .feat-card .ico{font-size:28px}
+  .feat-card .meta{margin-top:10px}
+
+  /* novelty list */
+  .ndlist{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:18px}
+  .nd{
+    border:1px solid var(--border);border-radius:16px;padding:20px;
+    background:rgba(17,17,36,.5);position:relative
+  }
+  .nd .n{
+    font-family:var(--headline);font-size:42px;font-weight:900;
+    background:linear-gradient(180deg,var(--cyan),var(--violet));-webkit-background-clip:text;color:transparent;
+    line-height:1
+  }
+  .nd h4{font-family:var(--headline);font-size:17px;margin-top:8px}
+  .nd p{color:#E0E0F5;font-size:13.5px;line-height:1.6;margin-top:6px}
+
+  /* metrics */
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:24px}
+  .metric{
+    border:1px solid var(--border);border-radius:14px;padding:18px;
+    background:rgba(17,17,36,.5)
+  }
+  .metric .v{font-family:var(--headline);font-size:38px;font-weight:900;color:var(--cyan);line-height:1}
+  .metric .l{font-family:var(--label);font-size:10.5px;letter-spacing:.22em;color:#D0D0E8;text-transform:uppercase;margin-top:8px}
+
+  /* progress bars */
+  .phase{margin-top:18px;display:grid;gap:10px}
+  .phase .row{display:grid;grid-template-columns:200px 1fr 80px;align-items:center;gap:14px;font-size:13px}
+  .phase .row .name{font-family:var(--label);font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:var(--text)}
+  .phase .row .bar{height:8px;background:rgba(238,238,255,.06);border-radius:99px;overflow:hidden;position:relative}
+  .phase .row .bar > span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--violet),var(--cyan))}
+  .phase .row .pct{font-family:var(--label);font-size:12px;color:#E0E0F5;text-align:right;font-weight:700}
+  .phase .row.done .pct{color:var(--success)}
+
+  /* demo flow */
+  .flow{
+    margin-top:22px;display:grid;grid-template-columns:repeat(5,1fr);gap:14px
+  }
+  .flow .node{
+    border:1px solid var(--border);border-radius:14px;padding:16px;background:rgba(17,17,36,.55);
+    text-align:center;position:relative
+  }
+  .flow .node .lbl{font-family:var(--label);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan);opacity:.85}
+  .flow .node .name{font-family:var(--headline);font-size:15px;margin-top:8px;color:#FFFFFF;font-weight:800}
+  .flow .node .desc{font-size:12.5px;color:#E0E0F5;margin-top:8px;line-height:1.5}
+  .flow .node + .node::before{
+    content:"→";position:absolute;left:-14px;top:50%;transform:translateY(-50%);color:var(--cyan)
+  }
+
+  /* QA / testing */
+  .testing{display:grid;grid-template-columns:1.1fr 1fr;gap:24px;margin-top:18px;align-items:start}
+  .donut{
+    position:relative;width:240px;height:240px;border-radius:50%;
+    background:conic-gradient(var(--cyan) 0 100%, rgba(238,238,255,.06) 0 100%);
+    display:flex;align-items:center;justify-content:center;margin:0 auto
+  }
+  .donut::before{content:"";position:absolute;inset:18px;border-radius:50%;background:var(--bg)}
+  .donut .v{position:relative;font-family:var(--headline);font-size:46px;color:var(--cyan);font-weight:900}
+  .donut .v small{display:block;font-size:11px;color:#D8D8F0;font-family:var(--label);letter-spacing:.25em;margin-top:6px;font-weight:700}
+
+  /* closing */
+  .close-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:24px}
+
+  /* keyboard hint */
+  .khint{
+    position:fixed;left:88px;bottom:8px;font-family:var(--label);font-size:10px;letter-spacing:.25em;
+    text-transform:uppercase;color:var(--muted);opacity:.7;z-index:40
+  }
+  kbd{
+    border:1px solid var(--border);padding:2px 6px;border-radius:4px;color:var(--text);
+    font-family:var(--label);font-size:10px;background:rgba(26,26,53,.6)
+  }
+
+  @media (max-width:1100px){
+    .feat-grid{grid-template-columns:repeat(2,1fr)}
+    .arch{grid-template-columns:1fr}
+    .arrow-col{flex-direction:row;justify-content:center}
+    .ndlist,.metrics{grid-template-columns:repeat(2,1fr)}
+    .flow{grid-template-columns:repeat(2,1fr)}
+    .flow .node + .node::before{display:none}
+    h2.h{font-size:42px}
+  }
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="corner tl">ANIAD</div>
+  <div class="corner tr">Final Year Project</div>
+  <div class="corner bl">Fakhir Hassan · Husanin Shehanshah</div>
+  <div class="corner br" id="slide-num">01 / 11</div>
+</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1 — COVER -->
+  <section class="slide cover active">
+    <div class="ring"></div>
+    <div class="ring inner"></div>
+    <span class="eyebrow">FINAL YEAR PROJECT</span>
+    <h1 class="title"><span class="glow">ANIAD</span></h1>
+    <div class="sub">An AI-Powered Animation &amp; 3D Generation Platform</div>
+    <p class="lede" style="margin-top:22px">
+      Local-first creative AI: turn text into video, text into images, images into textured 3D, and scripts into narrated multi-clip animations — all from one web app.
+    </p>
+    <div class="meta">
+      <div><b style="color:var(--cyan)">Team Member 1</b><br/>Fakhir Hassan Shaba<br/><span style="color:#A8E8D0">FA22-BSE-085</span></div>
+      <div><b style="color:var(--cyan)">Team Member 2</b><br/>Husanin Shehanshah<br/><span style="color:#A8E8D0">FA22-BSE-024</span></div>
+      <div><b style="color:var(--cyan)">Stack</b><br/>Next.js · Flask<br/>Supabase</div>
+      <div><b style="color:var(--cyan)">Hardware</b><br/>Mac M4 Pro<br/>+ RunPod</div>
+    </div>
+  </section>
+
+  <!-- 2 — PROBLEM / VISION -->
+  <section class="slide">
+    <span class="eyebrow">The Gap</span>
+    <h2 class="h">Creative AI is <span class="accent">paywalled</span>, fragmented, and cloud-locked.</h2>
+    <p class="lede">Tools like Runway, Pika and Sora cost $20–$95/mo, run only in proprietary clouds, and force creators to jump between five different sites for video, voice, image and 3D. No single platform combines them — and none of them respect the creator's hardware.</p>
+
+    <div class="grid two-col" style="margin-top:36px">
+      <div class="card">
+        <div class="ico">✕</div>
+        <h3>The Problem</h3>
+        <p style="margin-top:10px">
+          • Subscription cost barrier (~$50/mo average)<br/>
+          • Tools are siloed: T2V, T2I, TTS, 3D — four products<br/>
+          • All processing happens on someone else's GPU<br/>
+          • Output is locked behind paywalls and watermarks
+        </p>
+      </div>
+      <div class="card" style="border-color:rgba(16,240,176,.35)">
+        <div class="ico" style="color:var(--cyan)">→</div>
+        <h3>ANIAD's Answer</h3>
+        <p style="margin-top:10px">
+          One unified pipeline: <span class="accent">script → scenes → video → voice → 3D.</span>
+          Runs <span class="accent">locally</span> when hardware allows, transparently bursts to <span class="pink">RunPod cloud GPU</span> only when needed. Open-source models, no paid APIs, full creator ownership.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 — FEATURES -->
+  <section class="slide">
+    <span class="eyebrow">What ANIAD Does</span>
+    <h2 class="h">Five generative pipelines, <span class="accent">one platform</span>.</h2>
+    <p class="lede">Every feature is wired into the same auth, the same project store, and the same video timeline — so a creator can move from idea to finished animation without leaving the app.</p>
+
+    <div class="feat-grid">
+      <div class="card feat-card">
+        <div class="ico">▶</div>
+        <span class="tag">Text → Video</span>
+        <h3>Wan2.1-T2V-1.3B</h3>
+        <p>An open-source diffusion model that paints short videos from text. Runs on the laptop when possible, on a cloud GPU when needed.</p>
+      </div>
+      <div class="card feat-card">
+        <div class="ico" style="color:#c4b5fd">◐</div>
+        <span class="tag">Text → Image</span>
+        <h3>SDXL on RunPod</h3>
+        <p>High-resolution stills generated on a serverless RunPod endpoint. Pay-per-second, scales to zero.</p>
+      </div>
+      <div class="card feat-card">
+        <div class="ico" style="color:var(--pink)">◧</div>
+        <span class="tag">Image → 3D</span>
+        <h3>Microsoft TRELLIS</h3>
+        <p>One photo in → a fully textured 3D model out, with realistic lighting and surface detail, ready for any 3D viewer.</p>
+      </div>
+      <div class="card feat-card">
+        <div class="ico" style="color:var(--cyan)">♪</div>
+        <span class="tag">Text → Speech</span>
+        <h3>Kokoro-82M</h3>
+        <p>23 voice presets, runs entirely on CPU, 312 MB model. No internet required for narration.</p>
+      </div>
+      <div class="card feat-card" style="grid-column:span 2">
+        <div class="ico" style="color:var(--cyan)">⌘</div>
+        <span class="tag">Animation Pipeline</span>
+        <h3>Script → Multi-clip MP4</h3>
+        <p>Ollama (llama3.1:8b) parses a script into per-clip prompts → Wan2.1 generates each clip → Kokoro narrates → FFmpeg crossfades + stitches → final MP4.</p>
+      </div>
+      <div class="card feat-card" style="grid-column:span 2">
+        <div class="ico">⌬</div>
+        <span class="tag">Viewer + Editor + Admin</span>
+        <h3>Creator &amp; Admin Surfaces</h3>
+        <p>Interactive 3D viewer (React Three Fiber, OrbitControls, PBR), in-browser video editor (trim/crop/music/narration), full admin dashboard with RBAC and analytics.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 — ARCHITECTURE -->
+  <section class="slide">
+    <span class="eyebrow">System Architecture</span>
+    <h2 class="h">Hybrid local + cloud, <span class="accent">routed automatically</span>.</h2>
+    <p class="lede">A single backend decides, on every request, whether the work should run on the laptop's GPU or be sent to a cloud GPU. The user-facing app never knows the difference — it just gets results.</p>
+
+    <div class="arch">
+      <div class="arch-block local">
+        <h4>Mac M4 Pro <span style="color:var(--cyan)">·</span> Local</h4>
+        <div class="where">Always running · 24 GB unified</div>
+        <div class="arch-row"><span class="dot"></span> Next.js 14 Frontend <span class="lbl">:3000</span></div>
+        <div class="arch-row"><span class="dot"></span> Flask 3.0 API <span class="lbl">:5001</span></div>
+        <div class="arch-row"><span class="dot"></span> Auth · Admin · History <span class="lbl">CPU</span></div>
+        <div class="arch-row"><span class="dot"></span> Kokoro-82M TTS <span class="lbl">CPU</span></div>
+        <div class="arch-row"><span class="dot"></span> Ollama llama3.1:8b <span class="lbl">CPU/GPU</span></div>
+        <div class="arch-row"><span class="dot"></span> FFmpeg stitch <span class="lbl">CPU</span></div>
+      </div>
+      <div class="arrow-col">
+        <div style="margin-bottom:6px">Smart Router</div>
+        <div class="arrow"></div>
+        <div style="margin-top:6px">picks best GPU</div>
+      </div>
+      <div class="arch-block cloud">
+        <h4>RunPod Serverless <span style="color:var(--pink)">·</span> Cloud</h4>
+        <div class="where">Pay-per-use · scales to zero</div>
+        <div class="arch-row"><span class="dot"></span> Wan2.1-T2V-1.3B <span class="lbl">RTX 4090</span></div>
+        <div class="arch-row"><span class="dot"></span> SDXL Text-to-Image <span class="lbl">RTX 4090</span></div>
+        <div class="arch-row"><span class="dot"></span> TRELLIS Image-to-3D <span class="lbl">RTX 4090</span></div>
+        <div class="arch-row"><span class="dot"></span> Cached model storage <span class="lbl">persistent</span></div>
+        <div class="arch-row"><span class="dot"></span> Spins up on demand <span class="lbl">CUDA</span></div>
+        <div class="arch-row"><span class="dot"></span> ~$1–2 per full demo <span class="lbl">cost</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap">
+      <span class="pill cyan">Next.js 14</span>
+      <span class="pill cyan">TypeScript</span>
+      <span class="pill cyan">Tailwind + shadcn/ui</span>
+      <span class="pill cyan">Zustand</span>
+      <span class="pill cyan">React Three Fiber</span>
+      <span class="pill violet">Flask 3.0</span>
+      <span class="pill violet">PyTorch · AI Models</span>
+      <span class="pill violet">Kokoro · Ollama · FFmpeg</span>
+      <span class="pill pink">Supabase Auth + RLS</span>
+      <span class="pill pink">RunPod Serverless</span>
+    </div>
+  </section>
+
+  <!-- 5 — HOW A VIDEO IS GENERATED -->
+  <section class="slide">
+    <span class="eyebrow">How a Video is Actually Generated</span>
+    <h2 class="h">From a <span class="accent">paragraph of text</span> to a narrated animated video.</h2>
+    <p class="lede">The full journey of a single request — from the moment the user clicks <span class="accent">Generate</span> to the moment the finished MP4 plays in the browser.</p>
+
+    <div class="pipe">
+      <div class="step"><div class="n">01</div><div class="name">Script In</div><div class="model">"A cat walks through a city at night…"</div></div>
+      <div class="step"><div class="n">02</div><div class="name">Scene Breakdown</div><div class="model">AI splits the script into clips</div></div>
+      <div class="step"><div class="n">03</div><div class="name">Clip Generation</div><div class="model">Each scene → short video on GPU</div></div>
+      <div class="step"><div class="n">04</div><div class="name">Narration</div><div class="model">Voice synth reads each scene aloud</div></div>
+      <div class="step"><div class="n">05</div><div class="name">Stitch &amp; Mix</div><div class="model">Clips + audio fused into one MP4</div></div>
+      <div class="step"><div class="n">06</div><div class="name">Delivered</div><div class="model">Streamed back to the browser</div></div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:24px">
+      <div class="card">
+        <span class="tag">Step 02 · Understanding</span>
+        <h3 style="margin-top:6px">A language model reads the story</h3>
+        <p style="margin-top:8px">A local large-language model (Llama 3.1) reads the script the way a director would — identifying distinct scenes, the subject of each, the setting, and the mood. It outputs a structured plan: a list of short, vivid prompts, one per clip.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Step 03 · Generation</span>
+        <h3 style="margin-top:6px">A diffusion model paints each clip</h3>
+        <p style="margin-top:8px">Each scene prompt is fed to <span class="accent">Wan2.1</span>, a text-to-video diffusion model. It starts from random noise and, over many denoising steps, sculpts a short video that matches the prompt — frame by frame, consistent in motion and style.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Step 04 · Voice</span>
+        <h3 style="margin-top:6px">A speech model narrates</h3>
+        <p style="margin-top:8px">In parallel, the same scene text is sent to <span class="accent">Kokoro</span>, a neural text-to-speech model. The user picks one of 23 voices; Kokoro produces studio-quality narration timed to match each clip's length.</p>
+      </div>
+    </div>
+
+    <div class="grid two-col" style="margin-top:18px">
+      <div class="card">
+        <span class="tag">Step 05 · Assembly</span>
+        <h3 style="margin-top:6px">FFmpeg stitches everything together</h3>
+        <p style="margin-top:8px">All generated clips and matching narration tracks are handed to <span class="accent">FFmpeg</span>, the industry-standard video toolkit. It adds smooth crossfades between scenes, mixes the voiceover, and encodes the final MP4 — one continuous animated video out of many small parts.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Where it runs</span>
+        <h3 style="margin-top:6px">The GPU question — solved automatically</h3>
+        <p style="margin-top:8px">Before generation begins, the backend checks what hardware it has. If the laptop's GPU is strong enough, the video is rendered <span class="accent">locally</span> — fast and free. If not, the same job is sent to a <span class="pink">cloud GPU</span> on demand. The user never has to choose.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 — DEMO FLOW -->
+  <section class="slide">
+    <span class="eyebrow">User Journey</span>
+    <h2 class="h">What a creator <span class="accent">actually does</span>.</h2>
+    <p class="lede">Five clicks from blank page to a narrated, multi-scene animated video. Every screen is real, in the live app today.</p>
+
+    <div class="flow">
+      <div class="node">
+        <div class="lbl">Step 01</div>
+        <div class="name">Sign up</div>
+        <div class="desc">Supabase Auth · creator role assigned by RLS</div>
+      </div>
+      <div class="node">
+        <div class="lbl">Step 02</div>
+        <div class="name">New Project</div>
+        <div class="desc">Pick: 2D→3D · T2I · T2V · Animation pipeline</div>
+      </div>
+      <div class="node">
+        <div class="lbl">Step 03</div>
+        <div class="name">Generate</div>
+        <div class="desc">Backend routes to local GPU or RunPod automatically</div>
+      </div>
+      <div class="node">
+        <div class="lbl">Step 04</div>
+        <div class="name">Edit</div>
+        <div class="desc">Trim, crop, add music, swap narration in browser</div>
+      </div>
+      <div class="node">
+        <div class="lbl">Step 05</div>
+        <div class="name">Export</div>
+        <div class="desc">Download MP4 / GLB · saved to project history</div>
+      </div>
+    </div>
+
+    <div class="grid two-col" style="margin-top:26px">
+      <div class="card">
+        <span class="tag">Creator surface</span>
+        <h3 style="margin-top:6px">/creator</h3>
+        <p style="margin-top:8px">2d-to-3d · animate · text-to-image · assets · edit · settings · help — every generative tool plus an in-browser timeline editor.</p>
+      </div>
+      <div class="card">
+        <span class="tag">Admin surface</span>
+        <h3 style="margin-top:6px">/admin</h3>
+        <p style="margin-top:8px">User management, conversion analytics, system stats. Admin-only routes are protected on the server — non-admin sessions are rejected before any data is fetched.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 — NOVELTY -->
+  <section class="slide">
+    <span class="eyebrow">FYP Contributions</span>
+    <h2 class="h">What's <span class="accent">new</span> about ANIAD.</h2>
+    <p class="lede">Each of these is a deliberate engineering decision the project's grade rests on — not features I copied from a tutorial.</p>
+
+    <div class="ndlist">
+      <div class="nd">
+        <div class="n">01</div>
+        <h4>Hybrid GPU Routing</h4>
+        <p>One backend, two GPUs. Each request transparently picks the laptop's GPU or a remote cloud GPU based on the model's needs — the user never sees the difference.</p>
+      </div>
+      <div class="nd">
+        <div class="n">02</div>
+        <h4>Unified Creative Pipeline</h4>
+        <p>T2V, T2I, TTS, 3D and scene parsing share the same auth, project model and history — competitors keep these as separate products.</p>
+      </div>
+      <div class="nd">
+        <div class="n">03</div>
+        <h4>No Paid APIs, No Watermarks</h4>
+        <p>Every model is open: Wan2.1, SDXL, TRELLIS, Kokoro, llama3.1. Total ongoing cost ≈ $1–2 per full animation demo.</p>
+      </div>
+      <div class="nd">
+        <div class="n">04</div>
+        <h4>Production-Grade Hardening</h4>
+        <p>12 bugs caught and fixed in a self-driven QA audit — auth bypasses, RLS gaps, silent FFmpeg failures, 401 reload loops. Selenium + pytest covering login, signup, voice, T2V and script parsing.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 — METRICS / STATUS -->
+  <section class="slide">
+    <span class="eyebrow">Project Status · May 2026</span>
+    <h2 class="h">Where the build <span class="accent">stands today</span>.</h2>
+    <p class="lede">~70 % complete. All flagship features generate end-to-end; remaining work is cloud worker deployment and final E2E pipeline testing.</p>
+
+    <div class="metrics">
+      <div class="metric"><div class="v">5</div><div class="l">Generative Pipelines</div></div>
+      <div class="metric"><div class="v">23</div><div class="l">Voice Presets · Kokoro</div></div>
+      <div class="metric"><div class="v">12 / 12</div><div class="l">Bugs Fixed · QA Audit</div></div>
+      <div class="metric"><div class="v">18 / 18</div><div class="l">Tests Passing</div></div>
+    </div>
+
+    <div class="phase">
+      <div class="row done"><div class="name">Phase 2 · TTS</div><div class="bar"><span style="width:100%"></span></div><div class="pct">DONE</div></div>
+      <div class="row done"><div class="name">Phase 5 · FFmpeg</div><div class="bar"><span style="width:100%"></span></div><div class="pct">DONE</div></div>
+      <div class="row done"><div class="name">Phase 6 · E2E Tests</div><div class="bar"><span style="width:100%"></span></div><div class="pct">DONE</div></div>
+      <div class="row done"><div class="name">Phase 7 · Frontend UI</div><div class="bar"><span style="width:100%"></span></div><div class="pct">DONE</div></div>
+      <div class="row"><div class="name">RunPod Worker</div><div class="bar"><span style="width:80%"></span></div><div class="pct">80 %</div></div>
+      <div class="row"><div class="name">Cloud E2E Validation</div><div class="bar"><span style="width:55%"></span></div><div class="pct">55 %</div></div>
+    </div>
+  </section>
+
+  <!-- 9 — TESTING / QA -->
+  <section class="slide">
+    <span class="eyebrow">Quality &amp; Security</span>
+    <h2 class="h">Engineering rigor, <span class="accent">not just demos</span>.</h2>
+
+    <div class="testing">
+      <div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px">
+          <div class="card">
+            <span class="tag">Frontend E2E</span>
+            <h3 style="margin-top:6px">Selenium · 13/13 ✓</h3>
+            <p style="margin-top:8px">Login + signup happy paths, validation, password mismatch, role-mismatch rejection, invalid email handling.</p>
+          </div>
+          <div class="card">
+            <span class="tag">Backend E2E</span>
+            <h3 style="margin-top:6px">pytest · 5/5 ✓</h3>
+            <p style="margin-top:8px">Health, animation check, Kokoro voice presets, full TTS round-trip, Ollama scene parser.</p>
+          </div>
+          <div class="card" style="grid-column:span 2">
+            <span class="tag">Security hardening</span>
+            <h3 style="margin-top:6px">All Critical &amp; High bugs resolved</h3>
+            <p style="margin-top:8px">
+              <span class="pill cyan">Auth on GPU endpoints</span>
+              <span class="pill cyan">Ownership checks</span>
+              <span class="pill cyan">RLS enabled</span>
+              <span class="pill cyan">Secrets out of git</span>
+              <span class="pill cyan">Validated FFmpeg output</span>
+              <span class="pill cyan">Graceful 401 handling</span>
+            </p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="donut" id="donut"><div class="v">100<small>BUGS RESOLVED</small></div></div>
+        <p class="lede" style="text-align:center;margin-top:18px;font-size:14px">
+          12 bugs found in self-audit · <span class="accent">12 fixed</span> ·<br/>
+          4 Critical · 4 High · 4 Medium
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 — CLOSING / Q&A -->
+  <section class="slide cover" style="justify-content:center">
+    <div class="ring"></div>
+    <span class="eyebrow">Thank You</span>
+    <h1 class="title" style="font-size:clamp(64px,9vw,140px)"><span class="glow">Questions?</span></h1>
+    <p class="lede" style="margin-top:18px">
+      ANIAD · An AI-powered animation &amp; 3D generation platform.<br/>
+      Next.js + Flask + Supabase · Mac M4 Pro + RunPod.
+    </p>
+    <div class="meta" style="margin-top:34px">
+      <div><b style="color:var(--cyan)">Fakhir Hassan Shaba</b><br/>FA22-BSE-085</div>
+      <div><b style="color:var(--cyan)">Husanin Shehanshah</b><br/>FA22-BSE-024</div>
+      <div><b style="color:var(--cyan)">Stack</b><br/>Next.js · Flask · Supabase</div>
+      <div><b style="color:var(--cyan)">Status</b><br/>Ready for demo</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="progress"><span id="bar"></span></div>
+<div class="khint">Use <kbd>←</kbd> <kbd>→</kbd> · <kbd>Space</kbd> · or click the buttons</div>
+
+<div class="nav">
+  <button id="prev" aria-label="Previous">←</button>
+  <button id="next" aria-label="Next">→</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total  = slides.length;
+  const bar    = document.getElementById('bar');
+  const numEl  = document.getElementById('slide-num');
+  let i = 0;
+
+  function show(n){
+    i = (n + total) % total;
+    slides.forEach((s,idx)=>s.classList.toggle('active', idx===i));
+    bar.style.width = ((i+1)/total*100) + '%';
+    numEl.textContent = String(i+1).padStart(2,'0') + ' / ' + String(total).padStart(2,'0');
+  }
+  document.getElementById('prev').onclick = ()=>show(i-1);
+  document.getElementById('next').onclick = ()=>show(i+1);
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown') show(i+1);
+    else if(e.key==='ArrowLeft'||e.key==='PageUp') show(i-1);
+    else if(e.key==='Home') show(0);
+    else if(e.key==='End') show(total-1);
+  });
+  // card hover spotlight
+  document.querySelectorAll('.card').forEach(c=>{
+    c.addEventListener('mousemove', e=>{
+      const r = c.getBoundingClientRect();
+      c.style.setProperty('--mx', (e.clientX-r.left)+'px');
+      c.style.setProperty('--my', (e.clientY-r.top)+'px');
+    });
+  });
+  // donut
+  const donut = document.getElementById('donut');
+  if(donut){
+    let p = 0;
+    const target = 100;
+    const tick = ()=>{
+      p = Math.min(target, p+2);
+      donut.style.background = 'conic-gradient(var(--cyan) 0 '+p+'%, rgba(238,238,255,.06) '+p+'% 100%)';
+      if(p<target) requestAnimationFrame(tick);
+    };
+    setTimeout(tick, 400);
+  }
+  show(0);
+</script>
+</body>
+</html>

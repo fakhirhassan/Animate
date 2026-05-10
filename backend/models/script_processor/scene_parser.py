@@ -111,21 +111,44 @@ class SceneParser:
 
         logger.info(f"Parsing scene: {user_text[:100]}...")
 
+        # Wrap the user's prompt so the model treats it as data to transform,
+        # not a request directed at itself. This avoids spurious refusals
+        # like "I can't help you with that" on perfectly benign scene text.
+        framed_user = (
+            "Convert the following scene description into the JSON schema "
+            "defined in the system message. Output JSON only.\n\n"
+            f"Scene description:\n{user_text}"
+        )
+
         response = ollama.chat(
             model=self.model_name,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_text},
+                {"role": "user", "content": framed_user},
             ],
+            # format="json" forces Ollama to emit syntactically valid JSON,
+            # which both prevents prose-style refusals and removes the need
+            # to strip markdown fences.
+            format="json",
             options={"temperature": 0.3, "num_predict": 2048},
         )
 
         raw = response.message.content.strip()
-        logger.debug(f"Raw LLM response: {raw[:500]}")
+        logger.info(f"Ollama response ({len(raw)} chars): {raw[:300]}")
 
-        scene = self._extract_json(raw)
+        if not raw:
+            raise ValueError("Ollama returned an empty response")
+
+        try:
+            scene = self._extract_json(raw)
+        except ValueError as e:
+            logger.error(
+                f"Scene parse failed.\n  User input: {user_text[:200]}\n"
+                f"  Ollama said: {raw[:300]}"
+            )
+            raise
+
         scene = self._validate_scene(scene)
-
         return scene
 
     def _extract_json(self, text: str) -> Dict[str, Any]:

@@ -17,9 +17,14 @@ import {
   Plus,
   X as XIcon,
   GripVertical,
+  Image as ImageIcon,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { animationAPI, voiceAPI, conversionAPI } from '@/lib/api';
+import { useGenerationStore } from '@/store/generationStore';
+import RatingDialog, { useHasRated } from '@/components/shared/RatingDialog';
+import { Star } from 'lucide-react';
 
 type Stage = 'input' | 'generating' | 'preview';
 
@@ -83,19 +88,23 @@ const DURATION_PRESETS = [
 
 type DurationSeconds = typeof DURATION_PRESETS[number]['seconds'];
 
-type GenMode = 'single' | 'multi';
+type GenMode = 'single' | 'multi' | 'image';
 
 export default function AnimatePage() {
   const [mode, setMode] = useState<GenMode>('single');
   const [prompt, setPrompt] = useState('');
   const [scenes, setScenes] = useState<string[]>(['', '']);
   const [narration, setNarration] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>('input');
   const [error, setError] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoMeta, setVideoMeta] = useState<any>(null);
   const [videoHistory, setVideoHistory] = useState<VideoHistoryItem[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const hasRated = useHasRated('t2v', videoMeta?.conversion_id || videoUrl || undefined);
   const [voicePresets, setVoicePresets] = useState<VoicePreset[]>([]);
   const [durationSeconds, setDurationSeconds] = useState<DurationSeconds>(20);
   const [settings, setSettings] = useState({
@@ -116,6 +125,48 @@ export default function AnimatePage() {
     }));
   };
   const videoRef = useRef<HTMLVideoElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Subscribe to the global animate job so navigation away & back doesn't
+  // reset the in-flight request. The HTTP call started by `runAnimateJob`
+  // continues running across route changes; when it lands the store
+  // updates and the effect below re-syncs this page's UI.
+  const animateJob = useGenerationStore((s) => s.jobs.animate);
+  const runAnimateJob = useGenerationStore((s) => s.run);
+  const resetAnimateJob = useGenerationStore((s) => s.reset);
+
+  useEffect(() => {
+    if (animateJob.status === 'running' && stage !== 'generating') {
+      setStage('generating');
+    } else if (animateJob.status === 'success' && animateJob.result) {
+      const data = animateJob.result;
+      if (data?.video_url) {
+        setVideoUrl(`${API_BASE}${data.video_url}`);
+        setVideoMeta(data);
+        setStage('preview');
+      }
+    } else if (animateJob.status === 'error') {
+      setError(animateJob.error || 'Failed to generate animation');
+      setStage('input');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animateJob.status, animateJob.finishedAt]);
+
+  const handleImagePick = (file: File | null) => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    if (!file) {
+      setImageFile(null);
+      setImagePreviewUrl(null);
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file (PNG, JPG, etc.)');
+      return;
+    }
+    setImageFile(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
+    setError(null);
+  };
 
   useEffect(() => {
     fetchVideoHistory().then(setVideoHistory);
@@ -146,6 +197,15 @@ export default function AnimatePage() {
         setError('Please describe your scene in at least 10 characters');
         return;
       }
+    } else if (mode === 'image') {
+      if (!imageFile) {
+        setError('Please upload a starting image');
+        return;
+      }
+      if (prompt.trim().length < 5) {
+        setError('Please describe how the image should animate (at least 5 characters)');
+        return;
+      }
     } else {
       const nonEmpty = scenes.map((s) => s.trim()).filter((s) => s.length >= 5);
       if (nonEmpty.length < 2) {
@@ -154,50 +214,66 @@ export default function AnimatePage() {
       }
     }
 
-    setStage('generating');
-    try {
-      const promptForHistory =
-        mode === 'single'
-          ? prompt.trim()
+    const promptLabel =
+      mode === 'single'
+        ? prompt.trim()
+        : mode === 'image'
+          ? `Image animation: ${prompt.trim()}`
           : scenes.map((s, i) => `Scene ${i + 1}: ${s.trim()}`).filter((_, i) => scenes[i].trim()).join(' | ');
 
-      let response;
-      if (mode === 'single') {
-        response = await animationAPI.generate({
-          text: prompt.trim(),
-          num_frames_per_segment: settings.num_frames_per_segment,
-          num_inference_steps: settings.num_inference_steps,
-          fps: settings.fps,
-          voice_preset: settings.voice_preset,
-          num_clips: settings.num_clips,
-        });
-      } else {
-        response = await animationAPI.generateMultiScene({
-          scenes: scenes.map((s) => s.trim()).filter((s) => s.length > 0),
-          num_frames_per_scene: settings.num_frames_per_segment,
-          num_inference_steps: settings.num_inference_steps,
-          fps: settings.fps,
-          voice_preset: settings.voice_preset,
-          narration: narration.trim(),
-        });
-      }
+    // Capture mode + form values at submit time so the closure is stable
+    // even if the user navigates away and the page unmounts.
+    const submitMode = mode;
+    const submitImage = imageFile;
+    const submitPrompt = prompt.trim();
+    const submitScenes = scenes.map((s) => s.trim()).filter((s) => s.length > 0);
+    const submitNarration = narration.trim();
+    const submitSettings = settings;
 
-      const data = response.data;
-      if (data.success && data.data?.video_url) {
-        const fullUrl = `${API_BASE}${data.data.video_url}`;
-        setVideoUrl(fullUrl);
-        setVideoMeta(data.data);
-        setStage('preview');
-        // Backend persisted the row; refetch so the list reflects DB state.
-        fetchVideoHistory().then(setVideoHistory);
-      } else {
-        setError(data.message || 'Failed to generate animation');
-        setStage('input');
-      }
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to generate animation. Is the backend running?';
-      setError(msg);
-      setStage('input');
+    setStage('generating');
+    try {
+      const data = await runAnimateJob('animate', promptLabel, async () => {
+        let response;
+        if (submitMode === 'single') {
+          response = await animationAPI.generate({
+            text: submitPrompt,
+            num_frames_per_segment: submitSettings.num_frames_per_segment,
+            num_inference_steps: submitSettings.num_inference_steps,
+            fps: submitSettings.fps,
+            voice_preset: submitSettings.voice_preset,
+            num_clips: submitSettings.num_clips,
+          });
+        } else if (submitMode === 'image') {
+          const fd = new FormData();
+          fd.append('image', submitImage!);
+          fd.append('text', submitPrompt);
+          fd.append('num_frames', String(submitSettings.num_frames_per_segment));
+          fd.append('num_inference_steps', String(submitSettings.num_inference_steps));
+          fd.append('fps', String(submitSettings.fps));
+          fd.append('voice_preset', submitSettings.voice_preset);
+          response = await animationAPI.imageAnimate(fd);
+        } else {
+          response = await animationAPI.generateMultiScene({
+            scenes: submitScenes,
+            num_frames_per_scene: submitSettings.num_frames_per_segment,
+            num_inference_steps: submitSettings.num_inference_steps,
+            fps: submitSettings.fps,
+            voice_preset: submitSettings.voice_preset,
+            narration: submitNarration,
+          });
+        }
+        const body = response.data;
+        if (!body?.success || !body?.data?.video_url) {
+          throw new Error(body?.message || 'Failed to generate animation');
+        }
+        return body.data;
+      });
+      // Effect above will mirror this into local state. Refresh history.
+      fetchVideoHistory().then(setVideoHistory);
+      // Suppress unused warning — `data` is consumed via the store effect.
+      void data;
+    } catch {
+      // Error already captured in the store; the effect above syncs it.
     }
   };
 
@@ -216,7 +292,13 @@ export default function AnimatePage() {
     });
   };
 
-  const handleNewVideo = () => { setStage('input'); setVideoUrl(null); setVideoMeta(null); setError(null); };
+  const handleNewVideo = () => {
+    setStage('input');
+    setVideoUrl(null);
+    setVideoMeta(null);
+    setError(null);
+    resetAnimateJob('animate');
+  };
   const handleDownload = () => {
     if (!videoUrl) return;
     const a = document.createElement('a');
@@ -267,7 +349,11 @@ export default function AnimatePage() {
             <div className="bg-surface border border-border rounded-lg p-6 bloom-shadow">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-headline text-sm font-bold text-foreground uppercase tracking-tight">
-                  {mode === 'single' ? 'Describe Your Scene' : 'Describe Your Scenes'}
+                  {mode === 'single'
+                    ? 'Describe Your Scene'
+                    : mode === 'image'
+                      ? 'Animate an Image'
+                      : 'Describe Your Scenes'}
                 </h2>
                 {/* Mode switcher */}
                 <div className="inline-flex bg-surface-high rounded-lg p-0.5 border border-border">
@@ -277,7 +363,16 @@ export default function AnimatePage() {
                       mode === 'single' ? 'bg-primary/20 text-primary' : 'text-muted hover:text-foreground'
                     }`}
                   >
-                    Single
+                    Text
+                  </button>
+                  <button
+                    onClick={() => setMode('image')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-label uppercase tracking-widest transition-all flex items-center gap-1 ${
+                      mode === 'image' ? 'bg-primary/20 text-primary' : 'text-muted hover:text-foreground'
+                    }`}
+                  >
+                    <ImageIcon className="h-3 w-3" />
+                    Image
                   </button>
                   <button
                     onClick={() => setMode('multi')}
@@ -298,6 +393,69 @@ export default function AnimatePage() {
                   placeholder="A cat walking through a sunlit garden, looking around curiously. The cat says 'What a beautiful day!' with a happy expression."
                   className="w-full h-40 bg-input border border-border rounded-lg p-4 text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
                 />
+              ) : mode === 'image' ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted font-label">
+                    Upload a starting image and describe how it should move. Runs on the cloud GPU (Wan2.2).
+                  </p>
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImagePick(e.target.files?.[0] ?? null)}
+                    className="hidden"
+                  />
+                  {imagePreviewUrl ? (
+                    <div className="relative bg-input border border-border rounded-lg overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imagePreviewUrl}
+                        alt="Starting frame"
+                        className="w-full max-h-64 object-contain bg-void-black"
+                      />
+                      <div className="flex items-center justify-between p-2 border-t border-border">
+                        <span className="text-xs text-muted font-label truncate">
+                          {imageFile?.name}
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => imageInputRef.current?.click()}
+                            className="text-xs text-muted hover:text-foreground font-label uppercase tracking-widest"
+                          >
+                            Replace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleImagePick(null)}
+                            className="text-xs text-muted hover:text-destructive font-label uppercase tracking-widest"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full h-32 bg-input border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-muted hover:text-foreground hover:border-primary/50 transition-all"
+                    >
+                      <Upload className="h-5 w-5" />
+                      <span className="text-xs font-label uppercase tracking-widest">
+                        Click to upload starting image
+                      </span>
+                      <span className="text-[10px] text-muted/60">PNG, JPG, WebP</span>
+                    </button>
+                  )}
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGenerate(); }}
+                    placeholder="Describe the motion: e.g. 'the cat slowly turns its head and blinks, soft camera push-in'"
+                    className="w-full h-24 bg-input border border-border rounded-lg p-3 text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                  />
+                </div>
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-muted font-label">
@@ -505,14 +663,18 @@ export default function AnimatePage() {
                 <p className="text-xs text-muted font-label">
                   {mode === 'single'
                     ? <>{prompt.length} chars &middot; ~{estimatedDuration.toFixed(0)}s video &middot; Cmd+Enter to generate</>
-                    : <>{scenes.filter((s) => s.trim()).length} scene(s) &middot; ~{(settings.num_frames_per_segment / settings.fps * scenes.filter((s) => s.trim()).length).toFixed(1)}s total</>
+                    : mode === 'image'
+                      ? <>{imageFile ? '1 image' : 'no image'} &middot; {prompt.length} chars &middot; ~{(settings.num_frames_per_segment / settings.fps).toFixed(1)}s clip</>
+                      : <>{scenes.filter((s) => s.trim()).length} scene(s) &middot; ~{(settings.num_frames_per_segment / settings.fps * scenes.filter((s) => s.trim()).length).toFixed(1)}s total</>
                   }
                 </p>
                 <Button
                   onClick={handleGenerate}
                   disabled={mode === 'single'
                     ? prompt.trim().length < 10
-                    : scenes.filter((s) => s.trim().length >= 5).length < 2}
+                    : mode === 'image'
+                      ? !imageFile || prompt.trim().length < 5
+                      : scenes.filter((s) => s.trim().length >= 5).length < 2}
                   className="font-headline text-xs tracking-widest"
                 >
                   <Film className="h-4 w-4 mr-2" />Generate Animation
@@ -611,6 +773,15 @@ export default function AnimatePage() {
                     <Button variant="ghost" onClick={handleNewVideo} className="text-muted hover:text-foreground">
                       <RotateCcw className="h-4 w-4 mr-2" />New Animation
                     </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setRatingOpen(true)}
+                      disabled={hasRated}
+                      className="border-border"
+                    >
+                      <Star className={`h-4 w-4 mr-2 ${hasRated ? 'fill-yellow-400 text-yellow-400' : ''}`} />
+                      {hasRated ? 'Rated' : 'Rate'}
+                    </Button>
                     <Button onClick={handleDownload}>
                       <Download className="h-4 w-4 mr-2" />Download MP4
                     </Button>
@@ -660,6 +831,14 @@ export default function AnimatePage() {
           </div>
         </motion.div>
       )}
+
+      <RatingDialog
+        open={ratingOpen}
+        onOpenChange={setRatingOpen}
+        featureType="t2v"
+        conversionId={videoMeta?.conversion_id}
+        itemKey={videoMeta?.conversion_id || videoUrl || undefined}
+      />
     </div>
   );
 }
